@@ -205,9 +205,9 @@
         }
 
         function renderTable(data) {
-            const tbody = document.getElementById('tableBody');
             const filteredData = data.filter(shouldShowRow);
 
+            const tbody = document.getElementById('tableBody');
             if (!filteredData.length) {
                 document.getElementById('emptyState').classList.remove('hidden');
                 tbody.innerHTML = '';
@@ -255,11 +255,19 @@
             currentData.sort((a, b) => {
                 let va, vb;
 
-                if (key === 'Est_Probability') va = getNumericProbability(a[key]);
-                else if (key === 'Pct_Return') va = getPctReturn(a);
-                else if (key === 'R_R_Ratio') va = getNumericRR(a[key]);
-                else if (key === 'Play_Status') va = getPlayStatusValue(a);
-                else {
+                if (key === 'Est_Probability') {
+                    va = getNumericProbability(a[key]);
+                    vb = getNumericProbability(b[key]);
+                } else if (key === 'Pct_Return') {
+                    va = getPctReturn(a);
+                    vb = getPctReturn(b);
+                } else if (key === 'R_R_Ratio') {
+                    va = getNumericRR(a[key]);
+                    vb = getNumericRR(b[key]);
+                } else if (key === 'Play_Status') {
+                    va = getPlayStatusValue(a);
+                    vb = getPlayStatusValue(b);
+                } else {
                     va = a[key] || '';
                     vb = b[key] || '';
                 }
