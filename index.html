@@ -38,8 +38,8 @@
             </div>
         </div>
 
-        <div class="block xl:hidden text-xs text-teal-400 font-bold mb-2 animate-pulse">
-            ← Swipe horizontally to view full metrics and pricing →
+        <div class="text-xs text-teal-400 font-bold mb-2 animate-pulse flex items-center gap-1">
+            <span>↔️</span> Swipe or scroll horizontally to view full targets and current prices
         </div>
 
         <div class="w-full overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/30 backdrop-blur-xl shadow-2xl">
@@ -153,7 +153,6 @@
             const headerContainer = document.getElementById('tableHeaders');
             headerContainer.innerHTML = headers.map(h => {
                 if (hiddenColumns.includes(h)) return ''; 
-                // Added high right-side padding to the very last column header to match table styling
                 const isLast = h === headers[headers.length - 1] ? 'pr-12' : '';
                 return `
                     <th class="p-5 ${isLast} cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors text-base font-black tracking-wide" onclick="sortTable('${h}')">
@@ -198,7 +197,6 @@
                     } else if (h === 'Scenario') {
                         cellClass += " font-bold text-slate-100 max-w-sm text-base leading-relaxed";
                     } else if (h === 'Current_Price') {
-                        // Added right margin cushion padding (pr-12) to current price column cells
                         cellClass += " min-w-[160px] whitespace-nowrap pr-12";
                         val = (val && !isNaN(parseFloat(val))) ? `<span class="text-emerald-400 font-mono font-black text-xl bg-emerald-500/5 px-2.5 py-1.5 rounded-lg border border-emerald-500/10">$${parseFloat(val).toFixed(2)}</span>` : `<span class="text-slate-600 font-mono font-bold">-</span>`;
                     } else if (h === 'Entry' || h === 'Stop_Loss' || h === 'Targets') {
