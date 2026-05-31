@@ -94,7 +94,7 @@
             const entryMatches = entryStr.match(/(\d{1,4}(?:,\d{3})*(?:\.\d+)?)/g);
             const entryPrice = entryMatches ? parseFloat(entryMatches[0].replace(/,/g, '')) : 0;
 
-            let cleanTargets = targetsStr.replace(/\+\d+%/g, '').replace(/T1:|T2:/gi, '');
+            let cleanTargets = targetsStr.replace(/\+\d+%/g, '').replace(/T[12]:/gi, '');
             const targetMatches = cleanTargets.match(/(\d{1,4}(?:,\d{3})*(?:\.\d+)?)/g) || [];
             
             let bestTarget = 0;
@@ -153,7 +153,10 @@
                     } catch(e) {}
                 }
 
-                if (!text) return;
+                if (!text) {
+                    console.error("❌ No CSV found");
+                    return;
+                }
 
                 const parsed = Papa.parse(text, {header: true, skipEmptyLines: true});
                 currentData = parsed.data;
@@ -170,7 +173,10 @@
 
                 renderHeaders();
                 renderTable(currentData);
-            } catch(e) { console.error(e); }
+                console.log(`✅ Loaded ${currentData.length} rows`);
+            } catch(e) { 
+                console.error("Load error:", e); 
+            }
         }
 
         function renderHeaders() {
@@ -184,8 +190,9 @@
 
         function renderTable(data) {
             const tbody = document.getElementById('tableBody');
-            if (!data.length) {
+            if (!data || !data.length) {
                 document.getElementById('emptyState').classList.remove('hidden');
+                tbody.innerHTML = '';
                 return;
             }
             document.getElementById('emptyState').classList.add('hidden');
@@ -227,23 +234,21 @@
             const asc = sortDirection[key] === 'asc';
 
             currentData.sort((a, b) => {
-                let va, vb;
+                let va = a[key] || '';
+                let vb = b[key] || '';
 
                 if (key === 'Est_Probability') {
-                    va = getNumericProbability(a[key]);
-                    vb = getNumericProbability(b[key]);
+                    va = getNumericProbability(va);
+                    vb = getNumericProbability(vb);
                 } else if (key === 'Pct_Return') {
                     va = getPctReturn(a);
                     vb = getPctReturn(b);
                 } else if (key === 'R_R_Ratio') {
-                    va = getNumericRR(a[key]);
-                    vb = getNumericRR(b[key]);
+                    va = getNumericRR(va);
+                    vb = getNumericRR(vb);
                 } else if (key === 'Play_Status') {
                     va = getPlayStatusValue(a);
                     vb = getPlayStatusValue(b);
-                } else {
-                    va = a[key] || '';
-                    vb = b[key] || '';
                 }
 
                 if (!isNaN(parseFloat(va)) && !isNaN(parseFloat(vb))) {
