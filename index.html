@@ -72,17 +72,14 @@
             return map[h] || h.replace(/_/g, ' ').toUpperCase();
         }
 
-        // Improved cleaning to avoid double parentheses
         function cleanText(text) {
             if (!text) return '';
-            let cleaned = String(text)
+            return String(text)
                 .replace(/([a-z])([A-Z])/g, '$1 $2')
-                .replace(/(\d)\s*\(/g, '$1 (')           // number( → number (
-                .replace(/\)\s*([a-zA-Z])/g, ') $1')     // )word → ) word
-                .replace(/\(\s*\(/g, '(')                // remove double (( 
+                .replace(/(\d)\(/g, '$1 (')
+                .replace(/\)([a-zA-Z])/g, ') $1')
                 .replace(/\s+/g, ' ')
                 .trim();
-            return cleaned;
         }
 
         function getNumericProbability(val) {
@@ -205,7 +202,6 @@
 
             tbody.innerHTML = data.map(row => {
                 let html = `<div class="flex hover:bg-slate-800/70 border-b border-slate-800 last:border-b-0">`;
-                
                 globalHeaders.forEach(h => {
                     if (hiddenColumns.includes(h)) return;
                     const w = columnWidths[h] || '160px';
@@ -242,13 +238,24 @@
             const asc = sortDirection[key] === 'asc';
 
             currentData.sort((a, b) => {
-                let va = a[key] || '';
-                let vb = b[key] || '';
+                let va, vb;
 
-                if (key === 'Est_Probability') va = getNumericProbability(va);
-                else if (key === 'Pct_Return') va = getPctReturn(a);
-                else if (key === 'R_R_Ratio') va = getNumericRR(va);
-                else if (key === 'Play_Status') va = getPlayStatusValue(a);
+                if (key === 'Est_Probability') {
+                    va = getNumericProbability(a[key]);
+                    vb = getNumericProbability(b[key]);
+                } else if (key === 'Pct_Return') {
+                    va = getPctReturn(a);
+                    vb = getPctReturn(b);
+                } else if (key === 'R_R_Ratio') {
+                    va = getNumericRR(a[key]);
+                    vb = getNumericRR(b[key]);
+                } else if (key === 'Play_Status') {
+                    va = getPlayStatusValue(a);
+                    vb = getPlayStatusValue(b);
+                } else {
+                    va = a[key] || '';
+                    vb = b[key] || '';
+                }
 
                 if (!isNaN(parseFloat(va)) && !isNaN(parseFloat(vb))) {
                     return asc ? parseFloat(va) - parseFloat(vb) : parseFloat(vb) - parseFloat(va);
