@@ -11,28 +11,27 @@
         .custom-scroll::-webkit-scrollbar {
             height: 20px;
             width: 20px;
-            display: block;
         }
         .custom-scroll::-webkit-scrollbar-track {
             background: #020617;
         }
         .custom-scroll::-webkit-scrollbar-thumb {
             background: #475569;
+            border: 5px solid #020617;
             border-radius: 10px;
-            border: 4px solid #020617;
         }
         .custom-scroll::-webkit-scrollbar-thumb:hover {
             background: #64748b;
         }
 
         .table-wrapper {
-            height: calc(100vh - 260px); /* Adjusts to screen height */
+            height: calc(100vh - 260px);
             overflow: auto;
             border-radius: 16px;
         }
 
-        .table-cell {
-            font-size: 1.08rem;
+        .table-cell, .header-cell {
+            font-size: 1.05rem;
             line-height: 1.5;
         }
 
@@ -45,16 +44,15 @@
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
     <div class="w-full px-4 sm:px-6 lg:px-8 py-6 h-screen flex flex-col">
 
-        <!-- Header -->
         <header class="flex-shrink-0 mb-6 border-b border-slate-800 pb-6">
-            <div class="flex justify-between items-start">
+            <div class="flex justify-between items-center">
                 <div>
                     <h1 class="text-4xl md:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-teal-400 to-emerald-400 flex items-center gap-3">
                         📈 Wild Swing Trades
                     </h1>
                     <p class="text-slate-300 text-xl md:text-2xl mt-1 font-bold">Live Playbook • Active Database</p>
                 </div>
-                <div id="status" class="inline-flex items-center gap-2 bg-slate-900 border border-slate-700 px-6 py-3 rounded-2xl text-emerald-400 font-bold">
+                <div id="status" class="inline-flex items-center gap-2 bg-emerald-900/50 border border-emerald-500 px-6 py-3 rounded-2xl text-emerald-400 font-bold">
                     <span class="relative flex h-3 w-3">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
@@ -64,29 +62,27 @@
             </div>
         </header>
 
-        <!-- Controls -->
-        <div class="flex-shrink-0 flex flex-col sm:flex-row gap-4 mb-4">
+        <div class="flex-shrink-0 flex gap-4 mb-4">
             <div class="relative flex-1 max-w-md">
                 <span class="absolute left-4 top-4 text-slate-400">🔍</span>
-                <input type="text" id="searchInput" placeholder="Search..." 
+                <input type="text" id="searchInput" placeholder="Search by ticker, scenario..." 
                        class="w-full bg-slate-900 border border-slate-700 rounded-2xl pl-12 py-4 text-lg focus:border-teal-400">
             </div>
-            <div class="text-sm font-medium text-slate-400 self-center">
-                Click headers to sort • Swipe horizontally
+            <div class="text-sm text-slate-400 self-center hidden sm:block">
+                Click headers to sort • Horizontal scroll enabled
             </div>
         </div>
 
-        <!-- Scrollable Table -->
-        <div class="flex-1 table-wrapper custom-scroll border border-slate-800 bg-slate-900/50 backdrop-blur-xl overflow-auto" id="tableWrapper">
-            <div class="min-w-[2900px]">
-                <div id="tableHeaders" class="flex sticky top-0 bg-slate-900 border-b border-slate-700 z-20 text-sm font-extrabold uppercase tracking-widest">
+        <div class="flex-1 table-wrapper custom-scroll border border-slate-800 bg-slate-900/50 backdrop-blur-xl" id="tableWrapper">
+            <div class="min-w-[3100px] inline-block"> <!-- Increased width -->
+                <div id="tableHeaders" class="flex sticky top-0 bg-slate-900 border-b border-slate-700 z-20 text-xs font-extrabold uppercase tracking-widest">
                 </div>
-                <div id="tableBody" class="flex flex-col text-slate-200">
+                <div id="tableBody" class="flex flex-col text-slate-200 divide-y divide-slate-800">
                 </div>
             </div>
         </div>
 
-        <div id="emptyState" class="hidden text-center py-12 text-slate-400">No results found</div>
+        <div id="emptyState" class="hidden text-center py-12 text-slate-400 mt-4">No matching setups found.</div>
     </div>
 
     <script>
@@ -97,93 +93,84 @@
         const hiddenColumns = ['Post_Title', 'Price_Updated'];
 
         const columnWidths = {
-            'Date': '150px',
-            'Ticker': '130px',
-            'Play_Status': '190px',
-            'Scenario': '620px',
-            'Entry': '320px',
-            'Stop_Loss': '270px',
-            'Targets': '360px',
+            'Date': '140px',
+            'Ticker': '120px',
+            'Play_Status': '175px',
+            'Scenario': '650px',
+            'Entry': '340px',
+            'Stop_Loss': '290px',
+            'Targets': '380px',
             'R_R_Ratio': '150px',
             'Est_Probability': '160px',
-            'Link': '140px',
+            'Link': '130px',
             'Current_Price': '170px'
         };
 
         function formatHeaderLabel(h) {
-            if (h === 'R_R_Ratio') return 'R:R';
-            if (h === 'Est_Probability') return 'Est. Prob';
-            if (h === 'Play_Status') return 'Status';
-            return h.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            if (h === 'R_R_Ratio') return 'R:R RATIO';
+            if (h === 'Est_Probability') return 'EST. PROB.';
+            if (h === 'Play_Status') return 'STATUS';
+            return h.replace(/_/g, ' ').toUpperCase();
         }
 
         function getPlayStatusValue(row) {
-            const cp = parseFloat(row['Current_Price']);
-            const entry = String(row['Entry'] || '');
+            const cp = parseFloat(row.Current_Price);
+            const entry = String(row.Entry || '');
             if (!cp || isNaN(cp) || !entry) return 'TRACKING';
             const nums = entry.match(/\d+(\.\d+)?/g) || [];
             if (!nums.length) return 'TRACKING';
-            const low = Math.min(...nums.map(Number));
-            const high = Math.max(...nums.map(Number));
+            const low = Math.min(...nums.map(n => Number(n)));
+            const high = Math.max(...nums.map(n => Number(n)));
             if (entry.toLowerCase().includes('above') && cp >= low) return 'TRIGGERED';
-            if (cp >= low && cp <= (high || low*1.02)) return 'IN ZONE';
+            if (cp >= low && cp <= (high || low * 1.02)) return 'IN ZONE';
             if (cp < low) return 'PENDING';
             return 'PASSED';
         }
 
         function calculatePlayStatus(row) {
             const status = getPlayStatusValue(row);
-            const map = {
-                'TRIGGERED': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 animate-pulse',
-                'IN ZONE': 'bg-teal-500/20 text-teal-300 border-teal-500/40',
-                'PENDING': 'bg-amber-500/20 text-amber-400 border-amber-500/40',
-                'PASSED': 'bg-purple-500/20 text-purple-400 border-purple-500/40',
-                'TRACKING': 'bg-slate-800 text-slate-400 border-slate-700'
+            const styles = {
+                TRIGGERED: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse',
+                'IN ZONE': 'bg-teal-500/20 text-teal-300 border border-teal-500/40',
+                PENDING: 'bg-amber-500/20 text-amber-400 border border-amber-500/40',
+                PASSED: 'bg-purple-500/20 text-purple-400 border border-purple-500/40',
+                TRACKING: 'bg-slate-800 text-slate-400 border border-slate-700'
             };
-            return `<span class="inline-flex px-5 py-2 rounded-xl text-base font-bold border ${map[status]}">${status}</span>`;
+            return `<span class="inline-flex items-center px-5 py-2 rounded-xl text-sm font-bold ${styles[status]}">${status}</span>`;
         }
 
         async function loadData() {
             try {
                 let res = await fetch(baseUrl + new Date().toISOString().slice(0,10) + ".csv");
-                if (!res.ok) res = await fetch(baseUrl + new Date(Date.now()-86400000).toISOString().slice(0,10) + ".csv");
+                if (!res.ok) res = await fetch(baseUrl + new Date(Date.now() - 86400000).toISOString().slice(0,10) + ".csv");
                 const text = await res.text();
-                const { data, meta } = Papa.parse(text, {header: true, skipEmptyLines: true});
+                const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
                 
-                currentData = data;
-                globalHeaders = meta.fields;
+                currentData = parsed.data;
+                globalHeaders = parsed.meta.fields;
                 if (!globalHeaders.includes('Play_Status')) globalHeaders.splice(2, 0, 'Play_Status');
 
                 renderHeaders();
                 renderTable(currentData);
-                
-                document.getElementById('searchInput').addEventListener('input', e => {
-                    const term = e.target.value.toLowerCase();
-                    const filtered = currentData.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(term)));
-                    renderTable(filtered);
-                });
-            } catch(e) {
-                console.error(e);
-            }
+            } catch(e) { console.error(e); }
         }
 
         function renderHeaders() {
-            const el = document.getElementById('tableHeaders');
-            el.innerHTML = globalHeaders.map(h => {
+            const container = document.getElementById('tableHeaders');
+            container.innerHTML = globalHeaders.map(h => {
                 if (hiddenColumns.includes(h)) return '';
-                const w = columnWidths[h] || '180px';
+                const width = columnWidths[h] || '160px';
                 return `
-                    <div onclick="sortTable('${h}')" 
-                         class="p-5 cursor-pointer hover:bg-slate-800 flex items-center border-r border-slate-700 last:border-r-0"
-                         style="width: ${w}; flex-shrink: 0;">
-                        ${formatHeaderLabel(h)} <span class="ml-1 text-xs opacity-50">↕</span>
+                    <div class="header-cell p-5 cursor-pointer hover:bg-slate-800 flex items-center border-r border-slate-700 last:border-r-0" 
+                         style="width: ${width}; flex-shrink: 0;" onclick="sortTable('${h}')">
+                        ${formatHeaderLabel(h)}
                     </div>`;
             }).join('');
         }
 
         function renderTable(data) {
             const tbody = document.getElementById('tableBody');
-            if (!data.length) {
+            if (data.length === 0) {
                 document.getElementById('emptyState').classList.remove('hidden');
                 tbody.innerHTML = '';
                 return;
@@ -191,27 +178,27 @@
             document.getElementById('emptyState').classList.add('hidden');
 
             tbody.innerHTML = data.map(row => {
-                let html = `<div class="flex hover:bg-slate-800/50 border-b border-slate-800 last:border-b-0">`;
+                let html = `<div class="flex hover:bg-slate-800/60">`;
                 globalHeaders.forEach(h => {
-                    if (hiddenColumns.includes(h)) return;
-                    const w = columnWidths[h] || '180px';
+                    if (hiddenColumns.includes(h)) return '';
+                    const width = columnWidths[h] || '160px';
                     let val = row[h] || '';
-                    let cls = "table-cell p-5 border-r border-slate-800 last:border-r-0 flex items-center";
+                    let cls = `table-cell p-5 border-r border-slate-700 last:border-r-0 flex items-center`;
 
                     if (h === 'Play_Status') {
                         val = calculatePlayStatus(row);
                         cls += " justify-center";
                     } else if (h === 'Ticker') {
-                        val = `<span class="px-4 py-1 bg-blue-500/10 text-blue-400 rounded-lg font-bold">${val}</span>`;
+                        val = `<span class="px-4 py-1.5 bg-blue-600/20 text-blue-400 rounded-lg font-bold">${val}</span>`;
                     } else if (h === 'Link') {
-                        val = `<a href="${val}" target="_blank" class="text-teal-400 hover:underline">View →</a>`;
+                        val = val ? `<a href="${val}" target="_blank" class="text-teal-400 hover:text-teal-300">View 🔗</a>` : '';
                     } else if (h === 'Scenario') {
                         cls += " scenario-cell";
                     } else if (h === 'Current_Price') {
                         val = val ? `<span class="font-mono text-emerald-400">$${parseFloat(val).toFixed(2)}</span>` : '-';
                     }
 
-                    html += `<div class="${cls}" style="width:${w};flex-shrink:0;">${val}</div>`;
+                    html += `<div class="${cls}" style="width: ${width}; flex-shrink: 0;">${val}</div>`;
                 });
                 html += `</div>`;
                 return html;
@@ -219,14 +206,14 @@
         }
 
         function sortTable(key) {
-            sortDirection[key] = (sortDirection[key] === 'asc') ? 'desc' : 'asc';
+            sortDirection[key] = sortDirection[key] === 'asc' ? 'desc' : 'asc';
             const asc = sortDirection[key] === 'asc';
 
-            currentData.sort((a,b) => {
+            currentData.sort((a, b) => {
                 let va = key === 'Play_Status' ? getPlayStatusValue(a) : (a[key] || '');
                 let vb = key === 'Play_Status' ? getPlayStatusValue(b) : (b[key] || '');
                 if (!isNaN(parseFloat(va)) && !isNaN(parseFloat(vb))) {
-                    return asc ? parseFloat(va)-parseFloat(vb) : parseFloat(vb)-parseFloat(va);
+                    return asc ? parseFloat(va) - parseFloat(vb) : parseFloat(vb) - parseFloat(va);
                 }
                 return asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
             });
