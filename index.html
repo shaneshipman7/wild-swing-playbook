@@ -100,7 +100,9 @@
 
         function getNumericRR(val) {
             if (!val) return 0;
-            const match = String(val).match(/(\d+\.?\d*)/);
+            // For sorting: remove "+" and any text after it
+            let clean = String(val).replace('+', '').split(':')[0] || String(val);
+            const match = clean.match(/(\d+\.?\d*)/);
             return match ? parseFloat(match[1]) : 0;
         }
 
@@ -206,8 +208,8 @@
 
         function renderTable(data) {
             const filteredData = data.filter(shouldShowRow);
-
             const tbody = document.getElementById('tableBody');
+
             if (!filteredData.length) {
                 document.getElementById('emptyState').classList.remove('hidden');
                 tbody.innerHTML = '';
@@ -237,6 +239,8 @@
                         val = val ? `<span class="font-mono text-emerald-400">$${parseFloat(val).toFixed(2)}</span>` : '-';
                     } else if (h === 'Est_Probability') {
                         val = val ? `<span class="font-mono">${val}</span>` : '-';
+                    } else if (h === 'R_R_Ratio') {
+                        val = cleanText(val);                    // Keep the + for display
                     } else if (h === 'Pct_Return') {
                         const pct = getPctReturn(row);
                         val = pct ? `<span class="font-mono text-emerald-400 font-bold">+${pct}%</span>` : '-';
