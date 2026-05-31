@@ -27,7 +27,7 @@
 
         .table-cell {
             font-size: 1.1rem;
-            line-height: 1.5;
+            line-height: 1.55;
         }
         
         @media (max-width: 768px) {
@@ -38,7 +38,7 @@
 
         .scenario-cell {
             white-space: normal !important;
-            line-height: 1.45;
+            line-height: 1.5;
         }
     </style>
 </head>
@@ -69,16 +69,16 @@
                        class="w-full bg-slate-900 border border-slate-700 rounded-2xl pl-12 pr-4 py-4 text-lg focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20 text-slate-100 placeholder:text-slate-500 font-bold shadow-inner">
             </div>
             <div class="text-base font-bold text-slate-300 bg-slate-900/60 border border-slate-800 px-5 py-3 rounded-xl shadow-md">
-                Tip: Click column headers to sort • Swipe horizontally on mobile
+                Tip: Click headers to sort • Swipe horizontally on mobile
             </div>
         </div>
 
         <div class="text-sm text-teal-400 font-bold mb-5 flex items-center gap-2 bg-teal-500/5 border border-teal-500/10 px-5 py-3 rounded-xl">
-            ↔️ Horizontal scrolling enabled — swipe left/right to view full content
+            ↔️ Horizontal scrolling enabled — swipe to see full content
         </div>
 
         <div class="w-full overflow-x-auto custom-scroll rounded-3xl border border-slate-800 bg-slate-900/30 backdrop-blur-xl shadow-2xl">
-            <div class="min-w-[2600px] flex flex-col">   <!-- Much wider table -->
+            <div class="min-w-[2850px] flex flex-col">   <!-- Generous width -->
                 <div id="tableHeaders" class="flex bg-slate-900/95 border-b border-slate-700 text-slate-100 font-extrabold uppercase tracking-wider select-none sticky top-0 z-10">
                 </div>
                 
@@ -100,19 +100,18 @@
         let sortDirection = {};
         const hiddenColumns = ['Post_Title', 'Price_Updated'];
 
-        // Wider, more comfortable column widths
         const columnWidths = {
-            'Date': '140px',
-            'Ticker': '120px',
-            'Play_Status': '180px',
-            'Scenario': '520px',      // Much wider
-            'Entry': '280px',
-            'Stop_Loss': '220px',
-            'Targets': '300px',       // Wider for target ranges
-            'R_R_Ratio': '140px',
-            'Est_Probability': '150px',
-            'Link': '110px',
-            'Current_Price': '160px'
+            'Date': '145px',
+            'Ticker': '125px',
+            'Play_Status': '185px',
+            'Scenario': '580px',      // Much wider
+            'Entry': '310px',
+            'Stop_Loss': '260px',
+            'Targets': '340px',
+            'R_R_Ratio': '145px',
+            'Est_Probability': '155px',
+            'Link': '130px',
+            'Current_Price': '165px'
         };
 
         function formatHeaderLabel(header) {
