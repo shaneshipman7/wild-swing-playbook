@@ -6,7 +6,7 @@
     <title>Wild Swing Trades • Live Playbook</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    
+   
     <style>
         .custom-scroll::-webkit-scrollbar {
             height: 18px;
@@ -19,34 +19,29 @@
             border-radius: 9999px;
             border: 4px solid #020617;
         }
-
         .table-wrapper {
             height: calc(100vh - 240px);
             overflow: auto;
         }
-
         .table-cell {
-            font-size: 1.15rem;        /* Larger */
-            line-height: 1.45;
+            font-size: 1.25rem; /* Bigger text */
+            line-height: 1.5;
             font-weight: 600;
         }
-
         .header-cell {
-            font-size: 0.95rem;        /* Larger headers */
-            line-height: 1.3;
+            font-size: 1.05rem; /* Bigger headers */
+            line-height: 1.35;
             white-space: nowrap;
             font-weight: 700;
         }
-
         .scenario-cell {
             white-space: normal !important;
-            line-height: 1.4;
+            line-height: 1.45;
         }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
     <div class="w-full px-4 sm:px-6 lg:px-8 py-6 h-screen flex flex-col">
-
         <header class="flex-shrink-0 mb-5 border-b border-slate-800 pb-5">
             <div class="flex justify-between items-center">
                 <div>
@@ -60,25 +55,22 @@
                 </div>
             </div>
         </header>
-
         <div class="flex-shrink-0 flex gap-4 mb-4 items-center">
             <div class="relative flex-1 max-w-md">
                 <span class="absolute left-4 top-4 text-slate-400">🔍</span>
-                <input type="text" id="searchInput" placeholder="Search..." 
+                <input type="text" id="searchInput" placeholder="Search..."
                        class="w-full bg-slate-900 border border-slate-700 rounded-2xl pl-12 py-3.5 text-base focus:border-teal-400">
             </div>
             <div class="text-sm text-slate-400">Click headers to sort • Scroll horizontally</div>
         </div>
-
         <div class="flex-1 table-wrapper custom-scroll border border-slate-800 bg-slate-900/70 backdrop-blur-xl rounded-2xl overflow-auto">
-            <div class="min-w-[2650px]">
+            <div class="min-w-[2750px]">
                 <div id="tableHeaders" class="flex sticky top-0 bg-slate-900 border-b border-slate-700 z-20">
                 </div>
                 <div id="tableBody" class="flex flex-col text-slate-200">
                 </div>
             </div>
         </div>
-
         <div id="emptyState" class="hidden text-center py-12 text-slate-400">No matches found</div>
     </div>
 
@@ -88,11 +80,10 @@
         let globalHeaders = [];
         let sortDirection = {};
         const hiddenColumns = ['Post_Title', 'Price_Updated'];
-
         const columnWidths = {
             'Ticker': '115px',
             'Play_Status': '165px',
-            'Scenario': '460px',
+            'Scenario': '520px',
             'Entry': '310px',
             'Stop_Loss': '270px',
             'Targets': '350px',
@@ -104,11 +95,7 @@
         };
 
         function formatHeaderLabel(h) {
-            const map = {
-                'R_R_Ratio': 'R:R RATIO',
-                'Est_Probability': 'EST. PROB.',
-                'Play_Status': 'STATUS'
-            };
+            const map = { 'R_R_Ratio': 'R:R RATIO', 'Est_Probability': 'EST. PROB.', 'Play_Status': 'STATUS' };
             return map[h] || h.replace(/_/g, ' ').toUpperCase();
         }
 
@@ -144,17 +131,15 @@
                 if (!res.ok) res = await fetch(baseUrl + new Date(Date.now()-864e5).toISOString().slice(0,10) + ".csv");
                 const text = await res.text();
                 const parsed = Papa.parse(text, {header: true, skipEmptyLines: true});
-                
+               
                 currentData = parsed.data;
                 globalHeaders = parsed.meta.fields;
-                
+               
                 if (!globalHeaders.includes('Play_Status')) {
                     globalHeaders.splice(2, 0, 'Play_Status');
                 }
-
                 globalHeaders = globalHeaders.filter(h => h !== 'Date');
                 globalHeaders.push('Date');
-
                 renderHeaders();
                 renderTable(currentData);
             } catch(e) { console.error(e); }
@@ -166,7 +151,7 @@
                 if (hiddenColumns.includes(h)) return '';
                 const w = columnWidths[h] || '160px';
                 return `
-                    <div onclick="sortTable('${h}')" 
+                    <div onclick="sortTable('${h}')"
                          class="header-cell p-4 cursor-pointer hover:bg-slate-800 flex items-center border-r border-slate-700 last:border-r-0"
                          style="width: ${w}; flex-shrink: 0;">
                         ${formatHeaderLabel(h)}
@@ -182,37 +167,39 @@
                 return;
             }
             document.getElementById('emptyState').classList.add('hidden');
-
             tbody.innerHTML = data.map(row => {
                 let html = `<div class="flex hover:bg-slate-800/70 border-b border-slate-800 last:border-b-0">`;
-                
+               
                 globalHeaders.forEach(h => {
                     if (hiddenColumns.includes(h)) return;
                     const w = columnWidths[h] || '160px';
                     let val = row[h] || '';
                     let cls = `table-cell p-4 border-r border-slate-700 last:border-r-0 flex items-center`;
-
+                    
                     if (h === 'Play_Status') {
                         val = calculatePlayStatus(row);
                         cls += " justify-center";
-                    } 
+                    }
                     else if (h === 'Ticker') {
                         const tvUrl = `https://www.tradingview.com/symbols/${val}/`;
                         val = `<a href="${tvUrl}" target="_blank" class="text-blue-400 hover:text-blue-300 hover:underline font-bold">${val}</a>`;
-                    } 
+                    }
                     else if (h === 'Link') {
                         val = val ? `<a href="${val}" target="_blank" class="text-teal-400 hover:underline">View</a>` : '';
-                    } 
+                    }
                     else if (h === 'Scenario') {
                         cls += " scenario-cell";
-                    } 
+                        // Improve readability of crammed scenario text
+                        val = val.replace(/([a-z])([A-Z])/g, '$1 $2')
+                                .replace(/Buy([A-Z])/g, 'Buy $1')
+                                .replace(/([A-Z]{2,})([A-Z][a-z])/g, '$1 $2');
+                    }
                     else if (h === 'Current_Price') {
                         val = val ? `<span class="font-mono text-emerald-400">$${parseFloat(val).toFixed(2)}</span>` : '-';
                     }
-
                     html += `<div class="${cls}" style="width: ${w}; flex-shrink: 0;">${val}</div>`;
                 });
-                
+               
                 html += `</div>`;
                 return html;
             }).join('');
@@ -221,7 +208,6 @@
         function sortTable(key) {
             sortDirection[key] = sortDirection[key] === 'asc' ? 'desc' : 'asc';
             const asc = sortDirection[key] === 'asc';
-
             currentData.sort((a, b) => {
                 let va = key === 'Play_Status' ? getPlayStatusValue(a) : (a[key] || '');
                 let vb = key === 'Play_Status' ? getPlayStatusValue(b) : (b[key] || '');
@@ -233,7 +219,22 @@
             renderTable(currentData);
         }
 
-        loadData();
+        // Search functionality
+        document.addEventListener('DOMContentLoaded', () => {
+            const searchInput = document.getElementById('searchInput');
+            searchInput.addEventListener('input', (e) => {
+                const term = e.target.value.toLowerCase().trim();
+                if (!term) {
+                    renderTable(currentData);
+                    return;
+                }
+                const filtered = currentData.filter(row => 
+                    Object.values(row).some(val => String(val).toLowerCase().includes(term))
+                );
+                renderTable(filtered);
+            });
+            loadData();
+        });
     </script>
 </body>
 </html>
