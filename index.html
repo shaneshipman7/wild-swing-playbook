@@ -72,13 +72,16 @@
             return map[h] || h.replace(/_/g, ' ').toUpperCase();
         }
 
+        // Improved cleaning with better parenthesis spacing
         function cleanText(text) {
             if (!text) return '';
-            return String(text)
-                .replace(/([a-z])([A-Z])/g, '$1 $2')           // Add space before capital letters
-                .replace(/(\d)(\()/g, '$1 $2')                 // Space before parenthesis
-                .replace(/\s+/g, ' ')                          // Clean multiple spaces
+            let cleaned = String(text)
+                .replace(/([a-z])([A-Z])/g, '$1 $2')           // camelCase spacing
+                .replace(/(\d)(\()/g, '$1 ($2')                // space before (
+                .replace(/\)(\w)/g, ') $1')                    // space after )
+                .replace(/\s+/g, ' ')                          // normalize spaces
                 .trim();
+            return cleaned;
         }
 
         function getNumericProbability(val) {
@@ -215,7 +218,7 @@
                         val = `<a href="https://www.tradingview.com/symbols/${val}/" target="_blank" class="text-blue-400 hover:text-blue-300 hover:underline font-bold">${val}</a>`;
                     } else if (h === 'Link') {
                         val = val ? `<a href="${val}" target="_blank" class="text-teal-400 hover:underline">View</a>` : '';
-                    } else if (h === 'Scenario' || h === 'Entry' || h === 'Targets') {
+                    } else if (h === 'Scenario' || h === 'Entry' || h === 'Targets' || h === 'Stop_Loss') {
                         cls += " scenario-cell";
                         val = cleanText(val);
                     } else if (h === 'Current_Price') {
