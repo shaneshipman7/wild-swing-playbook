@@ -7,22 +7,22 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
-        /* Bulletproof scrollbar enforcement override */
-        .force-scrollbar::-webkit-scrollbar {
-            height: 12px !important;
+        /* Force custom scrollbar visibility across all modern web browsers */
+        .custom-scroll::-webkit-scrollbar {
+            height: 14px !important;
             display: block !important;
         }
-        .force-scrollbar::-webkit-scrollbar-track {
+        .custom-scroll::-webkit-scrollbar-track {
             background: #020617 !important; /* matches slate-950 */
-            border-radius: 8px;
+            border-radius: 10px;
         }
-        .force-scrollbar::-webkit-scrollbar-thumb {
-            background: #1e293b !important; /* matches slate-800 */
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #334155 !important; /* high visibility slate-700 slider */
             border: 3px solid #020617 !important;
-            border-radius: 8px;
+            border-radius: 10px;
         }
-        .force-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #334155 !important; /* matches slate-700 */
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #475569 !important; /* slate-600 */
         }
     </style>
 </head>
@@ -57,12 +57,12 @@
             </div>
         </div>
 
-        <div class="text-sm text-teal-400 font-bold mb-3 flex items-center gap-2 bg-teal-500/5 border border-teal-500/10 px-4 py-2.5 rounded-xl w-fit">
-            <span>↔️</span> Use the scrollbar at the bottom of the table to slide out to full Targets and Current Prices.
+        <div class="text-sm text-teal-400 font-bold mb-4 flex items-center gap-2 bg-teal-500/5 border border-teal-500/10 px-4 py-3 rounded-xl w-fit">
+            <span>↔️</span> Use the slider rail at the bottom of the grid framework to scroll out right and view complete pricing matrices.
         </div>
 
-        <div class="w-full overflow-x-auto force-scrollbar rounded-2xl border border-slate-800 bg-slate-900/30 backdrop-blur-xl shadow-2xl">
-            <table class="text-left border-collapse table-fixed w-[1600px]">
+        <div class="w-full overflow-x-auto custom-scroll rounded-2xl border border-slate-800 bg-slate-900/30 backdrop-blur-xl shadow-2xl">
+            <table class="text-left border-collapse table-auto w-full">
                 <thead>
                     <tr id="tableHeaders" class="bg-slate-900/90 border-b border-slate-700 text-slate-100 text-base font-extrabold uppercase tracking-wider select-none">
                         </tr>
@@ -86,19 +86,19 @@
 
         const hiddenColumns = ['Post_Title', 'Price_Updated'];
 
-        // Strict proportional spacing map to prevent the table columns from resizing randomly
+        // Strict, non-negotiable raw pixel widths mapped to stop the browser from squishing cells
         const columnWidths = {
-            'Date': 'w-[120px]',
-            'Ticker': 'w-[100px]',
-            'Play_Status': 'w-[140px]',
-            'Scenario': 'w-[320px]',
-            'Entry': 'w-[200px]',
-            'Stop_Loss': 'w-[160px]',
-            'Targets': 'w-[200px]',
-            'R_R_Ratio': 'w-[110px]',
-            'Est_Probability': 'w-[110px]',
-            'Link': 'w-[100px]',
-            'Current_Price': 'w-[140px]'
+            'Date': '130px',
+            'Ticker': '110px',
+            'Play_Status': '160px',
+            'Scenario': '340px',
+            'Entry': '220px',
+            'Stop_Loss': '180px',
+            'Targets': '220px',
+            'R_R_Ratio': '120px',
+            'Est_Probability': '120px',
+            'Link': '110px',
+            'Current_Price': '160px'
         };
 
         function formatHeaderLabel(header) {
@@ -187,9 +187,12 @@
             const headerContainer = document.getElementById('tableHeaders');
             headerContainer.innerHTML = headers.map(h => {
                 if (hiddenColumns.includes(h)) return ''; 
-                const widthClass = columnWidths[h] || 'w-[150px]';
+                const pWidth = columnWidths[h] || '150px';
+                // CRITICAL FIX: Applies hard coded static style attributes directly to block the cell scaling engine
                 return `
-                    <th class="p-5 ${widthClass} cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors text-base font-black tracking-wide" onclick="sortTable('${h}')">
+                    <th class="p-5 cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors text-base font-black tracking-wide" 
+                        style="width: ${pWidth}; min-width: ${pWidth}; max-width: ${pWidth};"
+                        onclick="sortTable('${h}')">
                         <div class="flex items-center gap-1.5 whitespace-nowrap">
                             <span>${formatHeaderLabel(h)}</span>
                             <span class="text-slate-500 text-sm">↕️</span>
@@ -217,11 +220,11 @@
                     if (hiddenColumns.includes(h)) return; 
                     
                     let val = row[h] || '';
-                    const widthClass = columnWidths[h] || 'w-[150px]';
-                    let cellClass = `p-5 align-middle ${widthClass} break-words`;
+                    const pWidth = columnWidths[h] || '150px';
+                    let cellClass = "p-5 align-middle whitespace-normal break-words";
                     
                     if (h === 'Play_Status') {
-                        cellClass += " text-center";
+                        cellClass += " text-center whitespace-nowrap";
                         val = calculatePlayStatus(row);
                     } else if (h === 'Ticker') {
                         val = `<span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-black bg-blue-500/10 text-blue-400 border border-blue-500/30 tracking-wider">${val}</span>`;
@@ -239,7 +242,8 @@
                         cellClass += " text-slate-400 font-bold text-sm";
                     }
                     
-                    rowHtml += `<td class="${cellClass}">${val}</td>`;
+                    // CRITICAL FIX: Inline sizing blocks injected directly onto structural row cells
+                    rowHtml += `<td class="${cellClass}" style="width: ${pWidth}; min-width: ${pWidth}; max-width: ${pWidth};">${val}</td>`;
                 });
                 
                 rowHtml += `</tr>`;
