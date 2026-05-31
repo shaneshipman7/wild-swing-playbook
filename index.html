@@ -6,8 +6,6 @@
     <title>Wild Swing Trades • Live Playbook</title>
     <!-- Tailwind CSS for modern styling -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons for clean UI graphics -->
-    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
 
@@ -17,8 +15,7 @@
         <header class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
             <div>
                 <h1 class="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-teal-400 to-emerald-400 flex items-center gap-3">
-                    <i data-lucide="trending-up" class="text-teal-400 w-8 h-8"></i>
-                    Wild Swing Trades
+                    <span>📈</span> Wild Swing Trades
                 </h1>
                 <p class="text-slate-400 mt-1">Live Playbook Active Database Viewer</p>
             </div>
@@ -35,7 +32,7 @@
         <div class="mb-6 flex flex-col sm:flex-row gap-4 items-center justify-between">
             <!-- Search Bar -->
             <div class="relative w-full sm:w-72">
-                <i data-lucide="search" class="absolute left-3 top-2.5 h-4 w-4 text-slate-500"></i>
+                <span class="absolute left-3 top-2 text-slate-500 text-sm">🔍</span>
                 <input type="text" id="searchInput" placeholder="Filter by Ticker, Scenario..." 
                        class="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 text-slate-200 transition-all placeholder:text-slate-500">
             </div>
@@ -60,7 +57,7 @@
         
         <!-- Empty State View -->
         <div id="emptyState" class="hidden text-center py-12 border border-dashed border-slate-800 rounded-xl mt-4">
-            <i data-lucide="folder-open" class="mx-auto h-12 w-12 text-slate-600 mb-3"></i>
+            <div class="text-4xl mb-3">📁</div>
             <h3 class="text-slate-400 font-medium">No setups match your search filter</h3>
         </div>
     </div>
@@ -137,8 +134,7 @@
                 renderHeaders(globalHeaders);
                 renderTable(currentData, globalHeaders);
                 
-                document.getElementById('status').innerHTML = `<i data-lucide="check-circle-2" class="text-emerald-400 w-4 h-4"></i> <span class="text-emerald-400 font-semibold">Live System Connected</span>`;
-                lucide.createIcons();
+                document.getElementById('status').innerHTML = `✅ <span class="text-emerald-400 font-semibold">Live System Connected</span>`;
 
                 // Hook up the Search Box feature
                 document.getElementById('searchInput').addEventListener('input', (e) => {
@@ -151,8 +147,7 @@
 
             } catch (err) {
                 console.error(err);
-                document.getElementById('status').innerHTML = `<i data-lucide="alert-triangle" class="text-rose-400 w-4 h-4"></i> <span class="text-rose-400 font-semibold">Data Offline</span>`;
-                lucide.createIcons();
+                document.getElementById('status').innerHTML = `⚠️ <span class="text-rose-400 font-semibold">Data Offline</span>`;
             }
         }
 
@@ -164,12 +159,11 @@
                     <th class="p-4 cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors" onclick="sortTable('${h}')">
                         <div class="flex items-center gap-1.5">
                             <span>${formatHeaderLabel(h)}</span>
-                            <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 text-slate-500"></i>
+                            <span class="text-slate-500 text-xs">↕️</span>
                         </div>
                     </th>
                 `;
             }).join('');
-            lucide.createIcons();
         }
 
         function renderTable(data, headers) {
@@ -195,7 +189,7 @@
                     if (h === 'Ticker') {
                         val = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">${val}</span>`;
                     } else if (h === 'Link') {
-                        val = `<a href="${val}" target="_blank" class="inline-flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 bg-teal-500/5 hover:bg-teal-500/10 px-2.5 py-1.5 rounded-lg border border-teal-500/20 transition-all font-medium">View Post <i data-lucide="external-link" class="w-3 h-3"></i></a>`;
+                        val = `<a href="${val}" target="_blank" class="inline-flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 bg-teal-500/5 hover:bg-teal-500/10 px-2.5 py-1.5 rounded-lg border border-teal-500/20 transition-all font-medium">View Post 🔗</a>`;
                     } else if (h === 'Scenario') {
                         cellClass += " font-medium text-slate-200 max-w-xs";
                     } else if (h === 'Current_Price' && val) {
@@ -210,8 +204,6 @@
                 rowHtml += `</tr>`;
                 return rowHtml;
             }).join('');
-            
-            lucide.createIcons();
         }
 
         function sortTable(key) {
