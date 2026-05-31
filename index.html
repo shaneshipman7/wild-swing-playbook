@@ -72,17 +72,15 @@
             return map[h] || h.replace(/_/g, ' ').toUpperCase();
         }
 
-        // Improved: handles ranges like "65-75%" → returns 70
+        // Improved probability parser for "~55–65%" etc.
         function getNumericProbability(val) {
             if (!val) return 0;
-            const str = String(val).trim();
-            const matches = str.match(/\d+/g);
-            if (!matches) return 0;
+            const str = String(val).trim().replace('~', '').replace('%', '');
+            const numbers = str.match(/\d+/g);
+            if (!numbers) return 0;
             
-            const numbers = matches.map(Number);
-            if (numbers.length === 1) return numbers[0];
-            // Average of range
-            return Math.round(numbers.reduce((a, b) => a + b, 0) / numbers.length);
+            const nums = numbers.map(Number);
+            return Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
         }
 
         function getNumericRR(val) {
@@ -169,9 +167,7 @@
                 }
                 if (!globalHeaders.includes('Pct_Return')) {
                     const rrIndex = globalHeaders.indexOf('R_R_Ratio');
-                    if (rrIndex !== -1) {
-                        globalHeaders.splice(rrIndex + 1, 0, 'Pct_Return');
-                    }
+                    if (rrIndex !== -1) globalHeaders.splice(rrIndex + 1, 0, 'Pct_Return');
                 }
 
                 globalHeaders = globalHeaders.filter(h => h !== 'Date');
