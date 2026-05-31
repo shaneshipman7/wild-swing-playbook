@@ -40,6 +40,15 @@
             white-space: normal !important;
             line-height: 1.35;
         }
+
+        .ticker-link {
+            color: #60a5fa;
+            text-decoration: none;
+        }
+        .ticker-link:hover {
+            color: #93c5fd;
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
@@ -69,7 +78,7 @@
         </div>
 
         <div class="flex-1 table-wrapper custom-scroll border border-slate-800 bg-slate-900/70 backdrop-blur-xl rounded-2xl overflow-auto">
-            <div class="min-w-[2950px]">
+            <div class="min-w-[2680px]">
                 <div id="tableHeaders" class="flex sticky top-0 bg-slate-900 border-b border-slate-700 z-20">
                 </div>
                 <div id="tableBody" class="flex flex-col text-slate-200">
@@ -88,17 +97,17 @@
         const hiddenColumns = ['Post_Title', 'Price_Updated'];
 
         const columnWidths = {
-            'Date': '135px',
             'Ticker': '115px',
             'Play_Status': '165px',
-            'Scenario': '620px',
+            'Scenario': '480px',
             'Entry': '320px',
             'Stop_Loss': '280px',
             'Targets': '360px',
             'R_R_Ratio': '145px',
             'Est_Probability': '155px',
             'Link': '125px',
-            'Current_Price': '165px'
+            'Current_Price': '165px',
+            'Date': '135px'                    // Moved to end
         };
 
         function formatHeaderLabel(h) {
@@ -136,6 +145,10 @@
             return `<span class="inline-flex px-4 py-1.5 rounded-lg text-sm font-bold ${styles[status]}">${status}</span>`;
         }
 
+        function getTradingViewUrl(ticker) {
+            return `https://www.tradingview.com/symbols/${ticker}/`;
+        }
+
         async function loadData() {
             try {
                 let res = await fetch(baseUrl + new Date().toISOString().slice(0,10) + ".csv");
@@ -146,6 +159,10 @@
                 currentData = parsed.data;
                 globalHeaders = parsed.meta.fields;
                 if (!globalHeaders.includes('Play_Status')) globalHeaders.splice(2, 0, 'Play_Status');
+
+                // Move Date to the end
+                globalHeaders = globalHeaders.filter(h => h !== 'Date');
+                globalHeaders.push('Date');
 
                 renderHeaders();
                 renderTable(currentData);
@@ -187,11 +204,14 @@
                         val = calculatePlayStatus(row);
                         cls += " justify-center";
                     } else if (h === 'Ticker') {
-                        val = `<span class="px-3 py-1 bg-blue-500/20 text-blue-400 rounded font-bold">${val}</span>`;
+                        const tvUrl = getTradingViewUrl(val);
+                        val = `<a href="${tvUrl}" target="_blank" class="ticker-link px-3 py-1 bg-blue-500/20 hover:bg-blue-500/30 rounded font-bold">${val}</a>`;
                     } else if (h === 'Link') {
                         val = `<a href="${val}" target="_blank" class="text-teal-400 hover:underline">View</a>`;
                     } else if (h === 'Scenario') {
                         cls += " scenario-cell";
+                    } else if (h === 'Targets') {
+                        val = val.replace(/(\$\d+)/g, '<span class="font-mono">$1</span>');
                     } else if (h === 'Current_Price') {
                         val = val ? `<span class="font-mono text-emerald-400">$${parseFloat(val).toFixed(2)}</span>` : '-';
                     }
