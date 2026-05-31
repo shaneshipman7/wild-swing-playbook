@@ -156,12 +156,16 @@
                 currentData = parsed.data;
                 globalHeaders = parsed.meta.fields;
 
-                // Add Play_Status and Pct_Return columns
                 if (!globalHeaders.includes('Play_Status')) {
                     globalHeaders.splice(2, 0, 'Play_Status');
                 }
                 if (!globalHeaders.includes('Pct_Return')) {
-                    globalHeaders.splice(globalHeaders.indexOf('R_R_Ratio') + 1, 0, 'Pct_Return');
+                    const rrIndex = globalHeaders.indexOf('R_R_Ratio');
+                    if (rrIndex !== -1) {
+                        globalHeaders.splice(rrIndex + 1, 0, 'Pct_Return');
+                    } else {
+                        globalHeaders.splice(7, 0, 'Pct_Return');
+                    }
                 }
 
                 globalHeaders = globalHeaders.filter(h => h !== 'Date');
@@ -230,19 +234,10 @@
                 let va = a[key] || '';
                 let vb = b[key] || '';
 
-                if (key === 'Est_Probability') {
-                    va = getNumericProbability(va);
-                    vb = getNumericProbability(vb);
-                } else if (key === 'R_R_Ratio') {
-                    va = getNumericRR(va);
-                    vb = getNumericRR(vb);
-                } else if (key === 'Pct_Return') {
-                    va = getPctReturn(a);
-                    vb = getPctReturn(b);
-                } else if (key === 'Play_Status') {
-                    va = getPlayStatusValue(a);
-                    vb = getPlayStatusValue(b);
-                }
+                if (key === 'Est_Probability') va = getNumericProbability(va);
+                else if (key === 'R_R_Ratio') va = getNumericRR(va);
+                else if (key === 'Pct_Return') va = getPctReturn(a);
+                else if (key === 'Play_Status') va = getPlayStatusValue(a);
 
                 if (!isNaN(parseFloat(va)) && !isNaN(parseFloat(vb))) {
                     return asc ? parseFloat(va) - parseFloat(vb) : parseFloat(vb) - parseFloat(va);
