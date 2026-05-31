@@ -72,6 +72,15 @@
             return map[h] || h.replace(/_/g, ' ').toUpperCase();
         }
 
+        function cleanText(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/([a-z])([A-Z])/g, '$1 $2')           // Add space before capital letters
+                .replace(/(\d)(\()/g, '$1 $2')                 // Space before parenthesis
+                .replace(/\s+/g, ' ')                          // Clean multiple spaces
+                .trim();
+        }
+
         function getNumericProbability(val) {
             if (!val) return 0;
             let str = String(val).replace('~', '').replace('%', '').trim();
@@ -153,10 +162,7 @@
                     } catch(e) {}
                 }
 
-                if (!text) {
-                    console.error("❌ No CSV found");
-                    return;
-                }
+                if (!text) return;
 
                 const parsed = Papa.parse(text, {header: true, skipEmptyLines: true});
                 currentData = parsed.data;
@@ -173,10 +179,7 @@
 
                 renderHeaders();
                 renderTable(currentData);
-                console.log(`✅ Loaded ${currentData.length} rows`);
-            } catch(e) { 
-                console.error("Load error:", e); 
-            }
+            } catch(e) { console.error(e); }
         }
 
         function renderHeaders() {
@@ -192,12 +195,13 @@
             const tbody = document.getElementById('tableBody');
             if (!data || !data.length) {
                 document.getElementById('emptyState').classList.remove('hidden');
-                tbody.innerHTML = '';
                 return;
             }
             document.getElementById('emptyState').classList.add('hidden');
+
             tbody.innerHTML = data.map(row => {
                 let html = `<div class="flex hover:bg-slate-800/70 border-b border-slate-800 last:border-b-0">`;
+                
                 globalHeaders.forEach(h => {
                     if (hiddenColumns.includes(h)) return;
                     const w = columnWidths[h] || '160px';
@@ -211,9 +215,9 @@
                         val = `<a href="https://www.tradingview.com/symbols/${val}/" target="_blank" class="text-blue-400 hover:text-blue-300 hover:underline font-bold">${val}</a>`;
                     } else if (h === 'Link') {
                         val = val ? `<a href="${val}" target="_blank" class="text-teal-400 hover:underline">View</a>` : '';
-                    } else if (h === 'Scenario') {
+                    } else if (h === 'Scenario' || h === 'Entry' || h === 'Targets') {
                         cls += " scenario-cell";
-                        val = val.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/Buy([A-Z])/g, 'Buy $1');
+                        val = cleanText(val);
                     } else if (h === 'Current_Price') {
                         val = val ? `<span class="font-mono text-emerald-400">$${parseFloat(val).toFixed(2)}</span>` : '-';
                     } else if (h === 'Est_Probability') {
