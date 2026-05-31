@@ -15,6 +15,7 @@
         .table-cell { font-size: 1.25rem; line-height: 1.5; font-weight: 600; }
         .header-cell { font-size: 1.05rem; line-height: 1.35; white-space: nowrap; font-weight: 700; }
         .scenario-cell { white-space: normal !important; line-height: 1.45; }
+        .missing-price { color: #64748b; font-style: italic; }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
@@ -91,7 +92,6 @@
 
         function getNumericRR(val) {
             if (!val) return 0;
-            console.log("Sorting R:R:", val); // Debug
             let clean = String(val).replace('+', '').trim();
             const match = clean.match(/(\d+\.?\d*)/);
             return match ? parseFloat(match[1]) : 0;
@@ -236,7 +236,7 @@
                         cls += " scenario-cell";
                         val = cleanText(val);
                     } else if (h === 'Current_Price') {
-                        val = val ? `<span class="font-mono text-emerald-400">$${parseFloat(val).toFixed(2)}</span>` : '-';
+                        val = val && val !== '' ? `<span class="font-mono text-emerald-400">$${parseFloat(val).toFixed(2)}</span>` : `<span class="missing-price">N/A</span>`;
                     } else if (h === 'Est_Probability') {
                         val = val ? `<span class="font-mono">${val}</span>` : '-';
                     } else if (h === 'R_R_Ratio') {
@@ -256,8 +256,6 @@
             sortDirection[key] = sortDirection[key] === 'asc' ? 'desc' : 'asc';
             const asc = sortDirection[key] === 'asc';
 
-            console.log("Sorting by:", key); // Debug
-
             currentData.sort((a, b) => {
                 let va, vb;
 
@@ -270,7 +268,6 @@
                 } else if (key === 'R_R_Ratio') {
                     va = getNumericRR(a[key]);
                     vb = getNumericRR(b[key]);
-                    console.log("R:R values:", a[key], va, b[key], vb); // Debug
                 } else if (key === 'Play_Status') {
                     va = getPlayStatusValue(a);
                     vb = getPlayStatusValue(b);
