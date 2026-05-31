@@ -72,8 +72,13 @@
 
         function getNumericProbability(val) {
             if (!val) return 0;
-            const num = parseFloat(String(val).replace('%', '').trim());
-            return isNaN(num) ? 0 : num;
+            return parseFloat(String(val).replace('%', '').trim()) || 0;
+        }
+
+        function getNumericRR(val) {
+            if (!val) return 0;
+            const match = String(val).match(/(\d+\.?\d*)/);
+            return match ? parseFloat(match[1]) : 0;
         }
 
         function getPlayStatusValue(row) {
@@ -198,25 +203,32 @@
                 let va = a[key] || '';
                 let vb = b[key] || '';
 
-                // Special handling for Est_Probability
+                // Probability sorting
                 if (key === 'Est_Probability') {
                     va = getNumericProbability(va);
                     vb = getNumericProbability(vb);
                     return asc ? va - vb : vb - va;
                 }
 
-                // Special handling for Play_Status
+                // R:R Ratio sorting (percentage return potential)
+                if (key === 'R_R_Ratio') {
+                    va = getNumericRR(va);
+                    vb = getNumericRR(vb);
+                    return asc ? va - vb : vb - va;
+                }
+
+                // Play Status sorting
                 if (key === 'Play_Status') {
                     va = getPlayStatusValue(a);
                     vb = getPlayStatusValue(b);
                 }
 
-                // Numeric sorting
+                // Numeric fallback
                 if (!isNaN(parseFloat(va)) && !isNaN(parseFloat(vb))) {
                     return asc ? parseFloat(va) - parseFloat(vb) : parseFloat(vb) - parseFloat(va);
                 }
 
-                // Text sorting
+                // Text fallback
                 return asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
             });
 
