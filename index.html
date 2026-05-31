@@ -62,7 +62,7 @@
         </div>
 
         <div class="w-full overflow-x-auto custom-scroll rounded-2xl border border-slate-800 bg-slate-900/30 backdrop-blur-xl shadow-2xl">
-            <table class="text-left border-collapse table-auto w-full">
+            <table class="text-left border-collapse table-fixed w-full">
                 <thead>
                     <tr id="tableHeaders" class="bg-slate-900/90 border-b border-slate-700 text-slate-100 text-base font-extrabold uppercase tracking-wider select-none">
                         </tr>
@@ -86,17 +86,17 @@
 
         const hiddenColumns = ['Post_Title', 'Price_Updated'];
 
-        // Strict, non-negotiable raw pixel widths mapped to stop the browser from squishing cells
+        // Strict widths mapped out in absolute pixels to ensure headers match rows perfectly
         const columnWidths = {
-            'Date': '130px',
-            'Ticker': '110px',
+            'Date': '140px',
+            'Ticker': '120px',
             'Play_Status': '160px',
-            'Scenario': '340px',
-            'Entry': '220px',
-            'Stop_Loss': '180px',
-            'Targets': '220px',
-            'R_R_Ratio': '120px',
-            'Est_Probability': '120px',
+            'Scenario': '380px',
+            'Entry': '260px',
+            'Stop_Loss': '200px',
+            'Targets': '260px',
+            'R_R_Ratio': '130px',
+            'Est_Probability': '130px',
             'Link': '110px',
             'Current_Price': '160px'
         };
@@ -188,10 +188,10 @@
             headerContainer.innerHTML = headers.map(h => {
                 if (hiddenColumns.includes(h)) return ''; 
                 const pWidth = columnWidths[h] || '150px';
-                // CRITICAL FIX: Applies hard coded static style attributes directly to block the cell scaling engine
+                // Inline styles applied directly here to prevent compression
                 return `
                     <th class="p-5 cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors text-base font-black tracking-wide" 
-                        style="width: ${pWidth}; min-width: ${pWidth}; max-width: ${pWidth};"
+                        style="width: ${pWidth}; min-width: ${pWidth};"
                         onclick="sortTable('${h}')">
                         <div class="flex items-center gap-1.5 whitespace-nowrap">
                             <span>${formatHeaderLabel(h)}</span>
@@ -242,8 +242,8 @@
                         cellClass += " text-slate-400 font-bold text-sm";
                     }
                     
-                    // CRITICAL FIX: Inline sizing blocks injected directly onto structural row cells
-                    rowHtml += `<td class="${cellClass}" style="width: ${pWidth}; min-width: ${pWidth}; max-width: ${pWidth};">${val}</td>`;
+                    // Fixed width styles applied directly to table data cells
+                    rowHtml += `<td class="${cellClass}" style="width: ${pWidth}; min-width: ${pWidth};">${val}</td>`;
                 });
                 
                 rowHtml += `</tr>`;
