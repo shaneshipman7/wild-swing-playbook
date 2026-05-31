@@ -87,23 +87,27 @@
             return match ? parseFloat(match[1]) : 0;
         }
 
-        // Improved % Return calculation
+        // Much better % Return calculation
         function getPctReturn(row) {
             const entryStr = String(row.Entry || '');
             const targetsStr = String(row.Targets || '');
-            
-            const entryNums = entryStr.match(/\d+\.?\d*/g) || [];
-            const targetNums = targetsStr.match(/\d+\.?\d*/g) || [];
-            
-            if (!entryNums.length || !targetNums.length) return 0;
 
-            const entryPrice = parseFloat(entryNums[0]);
-            const bestTarget = Math.max(...targetNums.map(n => parseFloat(n)));
-            
+            // Extract first realistic entry price
+            let entryMatch = entryStr.match(/\$?(\d{1,4}(?:,\d{3})*(?:\.\d+)?)/);
+            const entryPrice = entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : 0;
+
+            // Extract highest target price
+            const targetMatches = targetsStr.match(/\$?(\d{1,4}(?:,\d{3})*(?:\.\d+)?)/g) || [];
+            let bestTarget = 0;
+            targetMatches.forEach(m => {
+                const num = parseFloat(m.replace(/\$|,/g, ''));
+                if (num > bestTarget) bestTarget = num;
+            });
+
             if (entryPrice <= 0 || bestTarget <= entryPrice) return 0;
-            
+
             const pct = Math.round(((bestTarget - entryPrice) / entryPrice) * 100);
-            return Math.min(pct, 500); // Cap at 500% to prevent crazy numbers
+            return Math.min(pct, 300); // Reasonable cap
         }
 
         function getPlayStatusValue(row) {
