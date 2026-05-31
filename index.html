@@ -91,8 +91,10 @@
 
         function getNumericRR(val) {
             if (!val) return 0;
-            // Extract the first number (e.g. "1:2.5+" → 2.5)
-            const match = String(val).match(/(\d+\.?\d*)/);
+            // Extract the number after the colon (e.g. "1:2.5+" → 2.5)
+            const parts = String(val).split(':');
+            const numStr = parts.length > 1 ? parts[1] : parts[0];
+            const match = numStr.match(/(\d+\.?\d*)/);
             return match ? parseFloat(match[1]) : 0;
         }
 
