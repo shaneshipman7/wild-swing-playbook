@@ -87,27 +87,29 @@
             return match ? parseFloat(match[1]) : 0;
         }
 
-        // Much better % Return calculation
+        // Improved % Return - ignores percentage numbers in targets
         function getPctReturn(row) {
             const entryStr = String(row.Entry || '');
             const targetsStr = String(row.Targets || '');
 
-            // Extract first realistic entry price
-            let entryMatch = entryStr.match(/\$?(\d{1,4}(?:,\d{3})*(?:\.\d+)?)/);
+            // Get entry price (first realistic number)
+            const entryMatch = entryStr.match(/\$?(\d{1,4}(?:,\d{3})*(?:\.\d+)?)/);
             const entryPrice = entryMatch ? parseFloat(entryMatch[1].replace(/,/g, '')) : 0;
 
-            // Extract highest target price
-            const targetMatches = targetsStr.match(/\$?(\d{1,4}(?:,\d{3})*(?:\.\d+)?)/g) || [];
+            // Get target prices - ignore numbers followed by % sign
+            const targetText = targetsStr.replace(/\+\d+%/g, ''); // Remove "+18%" style
+            const targetMatches = targetText.match(/\$?(\d{1,4}(?:,\d{3})*(?:\.\d+)?)/g) || [];
+            
             let bestTarget = 0;
             targetMatches.forEach(m => {
                 const num = parseFloat(m.replace(/\$|,/g, ''));
-                if (num > bestTarget) bestTarget = num;
+                if (num > bestTarget && num > 1) bestTarget = num;
             });
 
             if (entryPrice <= 0 || bestTarget <= entryPrice) return 0;
 
             const pct = Math.round(((bestTarget - entryPrice) / entryPrice) * 100);
-            return Math.min(pct, 300); // Reasonable cap
+            return Math.min(pct, 300); // Safety cap
         }
 
         function getPlayStatusValue(row) {
@@ -240,19 +242,10 @@
                 let va = a[key] || '';
                 let vb = b[key] || '';
 
-                if (key === 'Est_Probability') {
-                    va = getNumericProbability(va);
-                    vb = getNumericProbability(vb);
-                } else if (key === 'R_R_Ratio') {
-                    va = getNumericRR(va);
-                    vb = getNumericRR(vb);
-                } else if (key === 'Pct_Return') {
-                    va = getPctReturn(a);
-                    vb = getPctReturn(b);
-                } else if (key === 'Play_Status') {
-                    va = getPlayStatusValue(a);
-                    vb = getPlayStatusValue(b);
-                }
+                if (key === 'Est_Probability') va = getNumericProbability(va);
+                else if (key === 'R_R_Ratio') va = getNumericRR(va);
+                else if (key === 'Pct_Return') va = getPctReturn(a);
+                else if (key === 'Play_Status') va = getPlayStatusValue(a);
 
                 if (!isNaN(parseFloat(va)) && !isNaN(parseFloat(vb))) {
                     return asc ? parseFloat(va) - parseFloat(vb) : parseFloat(vb) - parseFloat(va);
