@@ -4,40 +4,238 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wild Swing Trades • Live Playbook</title>
+    <!-- Tailwind CSS for modern styling -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons for clean UI graphics -->
+    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body class="bg-slate-950 text-white p-8">
-    <h1 class="text-3xl font-bold mb-6">📈 Wild Swing Trades - Live Viewer</h1>
-    <p id="status" class="mb-4">Loading data...</p>
-    <table id="table" class="w-full border-collapse border border-slate-700"></table>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
+
+    <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <!-- Header Section -->
+        <header class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
+            <div>
+                <h1 class="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-teal-400 to-emerald-400 flex items-center gap-3">
+                    <i data-lucide="trending-up" class="text-teal-400 w-8 h-8"></i>
+                    Wild Swing Trades
+                </h1>
+                <p class="text-slate-400 mt-1">Live Playbook Active Database Viewer</p>
+            </div>
+            <div id="status" class="inline-flex items-center gap-2 bg-slate-900/80 border border-slate-800 px-4 py-2 rounded-full text-sm text-amber-400 font-medium shadow-xl">
+                <span class="relative flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </span>
+                Loading real-time data...
+            </div>
+        </header>
+
+        <!-- Controls Toolbar -->
+        <div class="mb-6 flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <!-- Search Bar -->
+            <div class="relative w-full sm:w-72">
+                <i data-lucide="search" class="absolute left-3 top-2.5 h-4 w-4 text-slate-500"></i>
+                <input type="text" id="searchInput" placeholder="Filter by Ticker, Scenario..." 
+                       class="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 text-slate-200 transition-all placeholder:text-slate-500">
+            </div>
+            <div class="text-xs text-slate-500 italic w-full sm:w-auto text-right">
+                Tip: Click columns headers to sort ↕️
+            </div>
+        </div>
+
+        <!-- Table Container -->
+        <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40 backdrop-blur-md shadow-2xl">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr id="tableHeaders" class="bg-slate-900/90 border-b border-slate-800 text-slate-300 text-xs font-semibold uppercase tracking-wider select-none">
+                        <!-- Dynamic headers get generated here -->
+                    </tr>
+                </thead>
+                <tbody id="tableBody" class="divide-y divide-slate-800/60 text-sm text-slate-300">
+                    <!-- Dynamic rows get generated here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Empty State View -->
+        <div id="emptyState" class="hidden text-center py-12 border border-dashed border-slate-800 rounded-xl mt-4">
+            <i data-lucide="folder-open" class="mx-auto h-12 w-12 text-slate-600 mb-3"></i>
+            <h3 class="text-slate-400 font-medium">No setups match your search filter</h3>
+        </div>
+    </div>
 
     <script>
-        const url = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_";
-        
-        async function loadData() {
-            const today = new Date().toISOString().slice(0,10);
-            let response = await fetch(url + today + ".csv");
+        const baseUrl = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_";[cite: 1]
+        let currentData = [];
+        let sortDirection = {};
+
+        // Helper: Format column headers to look human-readable
+        function formatHeaderLabel(header) {
+            return header.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        // CSV Parser that elegantly handles internal commas locked inside quotation marks
+        function parseCSV(text) {
+            const lines = text.trim().split('\n');
+            if (lines.length === 0 || !lines[0]) return { headers: [], rows: [] };
             
-            if (!response.ok) {
-                const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0,10);
-                response = await fetch(url + yesterday + ".csv");
-            }
+            const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
             
-            const csv = await response.text();
-            const rows = csv.trim().split('\n');
-            const headers = rows[0].split(',');
-            
-            let html = '<tr>' + headers.map(h => `<th class="border p-2 bg-slate-800">${h}</th>`).join('') + '</tr>';
-            
-            rows.slice(1).forEach(row => {
-                const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                html += '<tr>' + cols.map(c => `<td class="border p-2">${c.replace(/^"|"$/g,'')}</td>`).join('') + '</tr>';
+            const rows = lines.slice(1).map(line => {
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+                
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        result.push(current.trim().replace(/^"|"$/g, ''));
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                result.push(current.trim().replace(/^"|"$/g, ''));
+                return result;
             });
             
-            document.getElementById('table').innerHTML = html;
-            document.getElementById('status').innerHTML = '✅ Loaded latest data';
+            return { headers, rows };
         }
-        
+
+        async function loadData() {
+            try {
+                let response;
+                const today = new Date().toISOString().slice(0,10);[cite: 1]
+                
+                response = await fetch(baseUrl + today + ".csv");[cite: 1]
+                
+                if (!response.ok) {[cite: 1]
+                    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0,10);[cite: 1]
+                    response = await fetch(baseUrl + yesterday + ".csv");[cite: 1]
+                }
+                
+                if (!response.ok) throw new Error("Could not find a recent database CSV.");
+
+                const csvText = await response.text();[cite: 1]
+                const parsed = parseCSV(csvText);
+                
+                // Map rows into clean objects matching headers
+                currentData = parsed.rows.map(row => {
+                    let obj = {};
+                    parsed.headers.forEach((header, index) => {
+                        obj[header] = row[index] || '';
+                    });
+                    return obj;
+                });
+
+                renderHeaders(parsed.headers);
+                renderTable(currentData, parsed.headers);
+                
+                document.getElementById('status').innerHTML = `<i data-lucide="check-circle-2" class="text-emerald-400 w-4 h-4"></i> <span class="text-emerald-400 font-semibold">Live System Connected</span>`;
+                lucide.createIcons();
+
+                // Hook up the Search Box feature
+                document.getElementById('searchInput').addEventListener('input', (e) => {
+                    const term = e.target.value.toLowerCase();
+                    const filtered = currentData.filter(item => {
+                        return Object.values(item).some(val => String(val).toLowerCase().includes(term));
+                    });
+                    renderTable(filtered, parsed.headers);
+                });
+
+            } catch (err) {
+                document.getElementById('status').innerHTML = `<i data-lucide="alert-triangle" class="text-rose-400 w-4 h-4"></i> <span class="text-rose-400 font-semibold">Data Offline</span>`;
+                lucide.createIcons();
+            }
+        }
+
+        function renderHeaders(headers) {
+            const headerContainer = document.getElementById('tableHeaders');
+            headerContainer.innerHTML = headers.map(h => {
+                // Don't show Post_Title since it duplicates Ticker info visually
+                if (h === 'Post_Title') return ''; 
+                return `
+                    <th class="p-4 cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors" onclick="sortTable('${h}')">
+                        <div class="flex items-center gap-1.5">
+                            <span>${formatHeaderLabel(h)}</span>
+                            <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 text-slate-500"></i>
+                        </div>
+                    </th>
+                `;
+            }).join('');
+        }
+
+        function renderTable(data, headers) {
+            const tbody = document.getElementById('tableBody');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+            emptyState.classList.add('hidden');
+
+            tbody.innerHTML = data.map(row => {
+                let rowHtml = `<tr class="hover:bg-slate-900/60 transition-colors border-b border-slate-800/40">`;
+                
+                headers.forEach(h => {
+                    if (h === 'Post_Title') return; // Skip title field display
+                    
+                    let val = row[h];
+                    let cellClass = "p-4 align-top whitespace-normal";
+                    
+                    // Column specific logic customization
+                    if (h === 'Ticker') {
+                        val = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">${val}</span>`;
+                    } else if (h === 'Link') {
+                        val = `<a href="${val}" target="_blank" class="inline-flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 bg-teal-500/5 hover:bg-teal-500/10 px-2.5 py-1.5 rounded-lg border border-teal-500/20 transition-all font-medium">View Post <i data-lucide="external-link" class="w-3 h-3"></i></a>`;
+                    } else if (h === 'Scenario') {
+                        cellClass += " font-medium text-slate-200 max-w-xs";
+                    } else if (h === 'Current_Price' && val) {
+                        val = `<span class="text-emerald-400 font-mono font-semibold">$${val}</span>`;[cite: 2]
+                    } else if ((h === 'Entry' || h === 'Stop_Loss' || h === 'Targets')) {
+                        cellClass += " font-mono text-xs text-slate-400 max-w-xs";
+                    }
+                    
+                    rowHtml += `<td class="${cellClass}">${val}</td>`;
+                });
+                
+                rowHtml += `</tr>`;
+                return rowHtml;
+            }).join('');
+            
+            // Re-render icons injected into dynamic layout strings
+            lucide.createIcons();
+        }
+
+        function sortTable(key) {
+            // Toggle direction mapping sorting states
+            sortDirection[key] = sortDirection[key] === 'asc' ? 'desc' : 'asc';
+            const isAsc = sortDirection[key] === 'asc';
+            
+            currentData.sort((a, b) => {
+                let valA = a[key];
+                let valB = b[key];
+                
+                // Attempt numerical sanitization for pricing strings if present
+                if (!isNaN(parseFloat(valA)) && isFinite(valA)) {
+                    return isAsc ? valA - valB : valB - valA;
+                }
+                
+                return isAsc 
+                    ? String(valA).localeCompare(String(valB)) 
+                    : String(valB).localeCompare(String(valA));
+            });
+            
+            // Re-render with newly ordered data arrays
+            const headers = Object.keys(currentData[0] || {});
+            renderTable(currentData, headers);
+        }
+
         loadData();
     </script>
 </body>
