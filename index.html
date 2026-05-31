@@ -257,7 +257,7 @@
                     vb = b[key] || '';
                 }
 
-                // Force numeric sort for percentage return
+                // Stronger numeric sort for % RETURN
                 if (key === 'Pct_Return') {
                     return asc ? va - vb : vb - va;
                 }
