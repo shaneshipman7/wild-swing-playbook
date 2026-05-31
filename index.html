@@ -72,14 +72,15 @@
             return map[h] || h.replace(/_/g, ' ').toUpperCase();
         }
 
-        // Improved cleaning with better parenthesis spacing
+        // Improved cleaning for Entry, Targets, Stop Loss, etc.
         function cleanText(text) {
             if (!text) return '';
             let cleaned = String(text)
-                .replace(/([a-z])([A-Z])/g, '$1 $2')           // camelCase spacing
-                .replace(/(\d)(\()/g, '$1 ($2')                // space before (
-                .replace(/\)(\w)/g, ') $1')                    // space after )
-                .replace(/\s+/g, ' ')                          // normalize spaces
+                .replace(/([a-z])([A-Z])/g, '$1 $2')           // camelCase → space
+                .replace(/(\d)(\()/g, '$1 ($2')                // number( → number (
+                .replace(/\)(\w)/g, ') $1')                    // )word → ) word
+                .replace(/(\w)\(/g, '$1 (')                    // word( → word (
+                .replace(/\s+/g, ' ')                          // multiple spaces
                 .trim();
             return cleaned;
         }
