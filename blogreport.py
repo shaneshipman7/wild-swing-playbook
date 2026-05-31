@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 import pandas as pd
 import yfinance as yf
 import time
-import os
 
 # ================== CONFIG ==================
 DAYS_BACK = 7
