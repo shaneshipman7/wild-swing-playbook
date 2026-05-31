@@ -257,6 +257,11 @@
                     vb = b[key] || '';
                 }
 
+                // Force numeric sort for percentage return
+                if (key === 'Pct_Return') {
+                    return asc ? va - vb : vb - va;
+                }
+
                 if (!isNaN(parseFloat(va)) && !isNaN(parseFloat(vb))) {
                     return asc ? parseFloat(va) - parseFloat(vb) : parseFloat(vb) - parseFloat(va);
                 }
