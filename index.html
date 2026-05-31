@@ -32,22 +32,14 @@
 
         .header-cell {
             font-size: 0.85rem;
-            line-height: 1.2;
+            line-height: 1.25;
             white-space: nowrap;
         }
 
         .scenario-cell {
             white-space: normal !important;
             line-height: 1.35;
-        }
-
-        .ticker-link {
-            color: #60a5fa;
-            text-decoration: none;
-        }
-        .ticker-link:hover {
-            color: #93c5fd;
-            text-decoration: underline;
+            word-break: break-word;
         }
     </style>
 </head>
@@ -78,7 +70,7 @@
         </div>
 
         <div class="flex-1 table-wrapper custom-scroll border border-slate-800 bg-slate-900/70 backdrop-blur-xl rounded-2xl overflow-auto">
-            <div class="min-w-[2680px]">
+            <div class="min-w-[2650px]">
                 <div id="tableHeaders" class="flex sticky top-0 bg-slate-900 border-b border-slate-700 z-20">
                 </div>
                 <div id="tableBody" class="flex flex-col text-slate-200">
@@ -99,15 +91,15 @@
         const columnWidths = {
             'Ticker': '115px',
             'Play_Status': '165px',
-            'Scenario': '480px',
-            'Entry': '320px',
-            'Stop_Loss': '280px',
-            'Targets': '360px',
+            'Scenario': '460px',        // Tightened
+            'Entry': '310px',
+            'Stop_Loss': '270px',
+            'Targets': '350px',
             'R_R_Ratio': '145px',
             'Est_Probability': '155px',
             'Link': '125px',
             'Current_Price': '165px',
-            'Date': '135px'                    // Moved to end
+            'Date': '135px'
         };
 
         function formatHeaderLabel(h) {
@@ -145,10 +137,6 @@
             return `<span class="inline-flex px-4 py-1.5 rounded-lg text-sm font-bold ${styles[status]}">${status}</span>`;
         }
 
-        function getTradingViewUrl(ticker) {
-            return `https://www.tradingview.com/symbols/${ticker}/`;
-        }
-
         async function loadData() {
             try {
                 let res = await fetch(baseUrl + new Date().toISOString().slice(0,10) + ".csv");
@@ -158,9 +146,12 @@
                 
                 currentData = parsed.data;
                 globalHeaders = parsed.meta.fields;
-                if (!globalHeaders.includes('Play_Status')) globalHeaders.splice(2, 0, 'Play_Status');
+                
+                if (!globalHeaders.includes('Play_Status')) {
+                    globalHeaders.splice(2, 0, 'Play_Status');
+                }
 
-                // Move Date to the end
+                // Force Date to be last column
                 globalHeaders = globalHeaders.filter(h => h !== 'Date');
                 globalHeaders.push('Date');
 
@@ -194,6 +185,7 @@
 
             tbody.innerHTML = data.map(row => {
                 let html = `<div class="flex hover:bg-slate-800/70 border-b border-slate-800 last:border-b-0">`;
+                
                 globalHeaders.forEach(h => {
                     if (hiddenColumns.includes(h)) return;
                     const w = columnWidths[h] || '160px';
@@ -203,21 +195,24 @@
                     if (h === 'Play_Status') {
                         val = calculatePlayStatus(row);
                         cls += " justify-center";
-                    } else if (h === 'Ticker') {
-                        const tvUrl = getTradingViewUrl(val);
-                        val = `<a href="${tvUrl}" target="_blank" class="ticker-link px-3 py-1 bg-blue-500/20 hover:bg-blue-500/30 rounded font-bold">${val}</a>`;
-                    } else if (h === 'Link') {
-                        val = `<a href="${val}" target="_blank" class="text-teal-400 hover:underline">View</a>`;
-                    } else if (h === 'Scenario') {
+                    } 
+                    else if (h === 'Ticker') {
+                        const tvUrl = `https://www.tradingview.com/symbols/${val}/`;
+                        val = `<a href="${tvUrl}" target="_blank" class="text-blue-400 hover:text-blue-300 hover:underline font-bold">${val}</a>`;
+                    } 
+                    else if (h === 'Link') {
+                        val = val ? `<a href="${val}" target="_blank" class="text-teal-400 hover:underline">View</a>` : '';
+                    } 
+                    else if (h === 'Scenario') {
                         cls += " scenario-cell";
-                    } else if (h === 'Targets') {
-                        val = val.replace(/(\$\d+)/g, '<span class="font-mono">$1</span>');
-                    } else if (h === 'Current_Price') {
+                    } 
+                    else if (h === 'Current_Price') {
                         val = val ? `<span class="font-mono text-emerald-400">$${parseFloat(val).toFixed(2)}</span>` : '-';
                     }
 
                     html += `<div class="${cls}" style="width: ${w}; flex-shrink: 0;">${val}</div>`;
                 });
+                
                 html += `</div>`;
                 return html;
             }).join('');
