@@ -40,7 +40,7 @@
                        class="w-full bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 text-slate-200 transition-all placeholder:text-slate-500">
             </div>
             <div class="text-xs text-slate-500 italic w-full sm:w-auto text-right">
-                Tip: Click columns headers to sort ↕️
+                Tip: Click column headers to sort ↕️
             </div>
         </div>
 
@@ -68,6 +68,7 @@
     <script>
         const baseUrl = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_";[cite: 1]
         let currentData = [];
+        let globalHeaders = [];
         let sortDirection = {};
 
         // Helper: Format column headers to look human-readable
@@ -77,7 +78,7 @@
 
         // CSV Parser that elegantly handles internal commas locked inside quotation marks
         function parseCSV(text) {
-            const lines = text.trim().split('\n');
+            const lines = text.trim().split('\n').filter(line => line.trim() !== '');
             if (lines.length === 0 || !lines[0]) return { headers: [], rows: [] };
             
             const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
@@ -122,17 +123,19 @@
                 const csvText = await response.text();[cite: 1]
                 const parsed = parseCSV(csvText);
                 
+                globalHeaders = parsed.headers;
+
                 // Map rows into clean objects matching headers
                 currentData = parsed.rows.map(row => {
                     let obj = {};
-                    parsed.headers.forEach((header, index) => {
+                    globalHeaders.forEach((header, index) => {
                         obj[header] = row[index] || '';
                     });
                     return obj;
                 });
 
-                renderHeaders(parsed.headers);
-                renderTable(currentData, parsed.headers);
+                renderHeaders(globalHeaders);
+                renderTable(currentData, globalHeaders);
                 
                 document.getElementById('status').innerHTML = `<i data-lucide="check-circle-2" class="text-emerald-400 w-4 h-4"></i> <span class="text-emerald-400 font-semibold">Live System Connected</span>`;
                 lucide.createIcons();
@@ -143,10 +146,11 @@
                     const filtered = currentData.filter(item => {
                         return Object.values(item).some(val => String(val).toLowerCase().includes(term));
                     });
-                    renderTable(filtered, parsed.headers);
+                    renderTable(filtered, globalHeaders);
                 });
 
             } catch (err) {
+                console.error(err);
                 document.getElementById('status').innerHTML = `<i data-lucide="alert-triangle" class="text-rose-400 w-4 h-4"></i> <span class="text-rose-400 font-semibold">Data Offline</span>`;
                 lucide.createIcons();
             }
@@ -155,7 +159,6 @@
         function renderHeaders(headers) {
             const headerContainer = document.getElementById('tableHeaders');
             headerContainer.innerHTML = headers.map(h => {
-                // Don't show Post_Title since it duplicates Ticker info visually
                 if (h === 'Post_Title') return ''; 
                 return `
                     <th class="p-4 cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors" onclick="sortTable('${h}')">
@@ -166,6 +169,7 @@
                     </th>
                 `;
             }).join('');
+            lucide.createIcons();
         }
 
         function renderTable(data, headers) {
@@ -183,12 +187,11 @@
                 let rowHtml = `<tr class="hover:bg-slate-900/60 transition-colors border-b border-slate-800/40">`;
                 
                 headers.forEach(h => {
-                    if (h === 'Post_Title') return; // Skip title field display
+                    if (h === 'Post_Title') return; 
                     
-                    let val = row[h];
+                    let val = row[h] || '';
                     let cellClass = "p-4 align-top whitespace-normal";
                     
-                    // Column specific logic customization
                     if (h === 'Ticker') {
                         val = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">${val}</span>`;
                     } else if (h === 'Link') {
@@ -208,22 +211,19 @@
                 return rowHtml;
             }).join('');
             
-            // Re-render icons injected into dynamic layout strings
             lucide.createIcons();
         }
 
         function sortTable(key) {
-            // Toggle direction mapping sorting states
             sortDirection[key] = sortDirection[key] === 'asc' ? 'desc' : 'asc';
             const isAsc = sortDirection[key] === 'asc';
             
             currentData.sort((a, b) => {
-                let valA = a[key];
-                let valB = b[key];
+                let valA = a[key] || '';
+                let valB = b[key] || '';
                 
-                // Attempt numerical sanitization for pricing strings if present
-                if (!isNaN(parseFloat(valA)) && isFinite(valA)) {
-                    return isAsc ? valA - valB : valB - valA;
+                if (!isNaN(parseFloat(valA)) && isFinite(valA) && !isNaN(parseFloat(valB)) && isFinite(valB)) {
+                    return isAsc ? parseFloat(valA) - parseFloat(valB) : parseFloat(valB) - parseFloat(valA);
                 }
                 
                 return isAsc 
@@ -231,9 +231,7 @@
                     : String(valB).localeCompare(String(valA));
             });
             
-            // Re-render with newly ordered data arrays
-            const headers = Object.keys(currentData[0] || {});
-            renderTable(currentData, headers);
+            renderTable(currentData, globalHeaders);
         }
 
         loadData();
