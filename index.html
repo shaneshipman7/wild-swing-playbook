@@ -72,12 +72,12 @@
             return map[h] || h.replace(/_/g, ' ').toUpperCase();
         }
 
-        // Improved probability parser for "~55–65%" etc.
+        // Robust probability parser
         function getNumericProbability(val) {
             if (!val) return 0;
-            const str = String(val).trim().replace('~', '').replace('%', '');
+            let str = String(val).replace('~', '').replace('%', '').trim();
             const numbers = str.match(/\d+/g);
-            if (!numbers) return 0;
+            if (!numbers || numbers.length === 0) return 0;
             
             const nums = numbers.map(Number);
             return Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
@@ -162,9 +162,7 @@
                 currentData = parsed.data;
                 globalHeaders = parsed.meta.fields;
 
-                if (!globalHeaders.includes('Play_Status')) {
-                    globalHeaders.splice(2, 0, 'Play_Status');
-                }
+                if (!globalHeaders.includes('Play_Status')) globalHeaders.splice(2, 0, 'Play_Status');
                 if (!globalHeaders.includes('Pct_Return')) {
                     const rrIndex = globalHeaders.indexOf('R_R_Ratio');
                     if (rrIndex !== -1) globalHeaders.splice(rrIndex + 1, 0, 'Pct_Return');
