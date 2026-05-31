@@ -3,124 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wild Swing Trades • Live Playbook Viewer</title>
+    <title>Wild Swing Trades • Live Playbook</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
-        body { font-family: 'Inter', system_ui, sans-serif; }
-        .title-font { font-family: 'Space Grotesk', sans-serif; }
-        .live-dot { animation: pulse 2s infinite; }
-        tr:hover { background-color: #f8fafc; }
-        .actionable { background: linear-gradient(90deg, #ecfdf5, #f0fdf4); }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-    </style>
 </head>
-<body class="bg-slate-950 text-slate-200">
-    <div class="max-w-7xl mx-auto p-6">
-        <div class="flex justify-between items-center mb-8 border-b border-slate-800 pb-6">
-            <div>
-                <h1 class="title-font text-4xl font-semibold tracking-tighter flex items-center gap-x-3">
-                    📈 Wild Swing Trades <span class="text-emerald-400 text-2xl">LIVE</span>
-                </h1>
-                <p class="text-slate-400 mt-1">Auto-loaded from GitHub • Updated daily</p>
-            </div>
-            <div class="flex items-center gap-x-4">
-                <button onclick="loadLatestCSV()" class="flex items-center gap-x-2 bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-2xl font-medium cursor-pointer transition-colors">
-                    <i class="fa-solid fa-arrows-rotate"></i>
-                    <span>Refresh Data</span>
-                </button>
-            </div>
-        </div>
-
-        <div class="bg-white text-slate-900 rounded-3xl shadow-2xl overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead class="bg-slate-50 sticky top-0">
-                        <tr class="border-b">
-                            <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">TICKER</th>
-                            <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">SCENARIO</th>
-                            <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">CURRENT PRICE</th>
-                            <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">ENTRY</th>
-                            <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">STOP LOSS</th>
-                            <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">TARGETS</th>
-                            <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">R:R / PROB</th>
-                        </tr>
-                    </thead>
-                    <tbody id="table-body" class="divide-y text-sm"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="mt-6 text-xs text-slate-400 flex justify-between">
-            <div id="fetch-log">Loading latest data from GitHub...</div>
-        </div>
-    </div>
+<body class="bg-slate-950 text-white p-8">
+    <h1 class="text-3xl font-bold mb-6">📈 Wild Swing Trades - Live Viewer</h1>
+    <p id="status" class="mb-4">Loading data...</p>
+    <table id="table" class="w-full border-collapse border border-slate-700"></table>
 
     <script>
-        const GITHUB_CSV_URL = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_";
-
-        async function loadLatestCSV() {
-            const log = document.getElementById('fetch-log');
-            log.textContent = "Fetching latest playbook...";
-
+        const url = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_";
+        
+        async function loadData() {
             const today = new Date().toISOString().slice(0,10);
-            let url = GITHUB_CSV_URL + today + ".csv";
-
-            try {
-                const res = await fetch(url);
-                if (!res.ok) {
-                    // Try yesterday if today doesn't exist yet
-                    const yesterday = new Date();
-                    yesterday.setDate(yesterday.getDate() - 1);
-                    url = GITHUB_CSV_URL + yesterday.toISOString().slice(0,10) + ".csv";
-                    const res2 = await fetch(url);
-                    if (!res2.ok) throw new Error("No data found");
-                }
-
-                const csvText = await res.text();
-                const rows = csvText.trim().split('\n');
-                const headers = rows[0].split(',');
-
-                const data = rows.slice(1).map(row => {
-                    const values = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                    const obj = {};
-                    headers.forEach((h, i) => obj[h] = values[i] ? values[i].replace(/^"|"$/g, '') : '');
-                    return obj;
-                }).filter(row => row.Ticker);
-
-                renderTable(data);
-                log.textContent = `Loaded ${data.length} setups • Last updated: ${today}`;
-
-            } catch (e) {
-                log.textContent = "⚠️ Could not load latest data. Try again later.";
-                console.error(e);
+            let response = await fetch(url + today + ".csv");
+            
+            if (!response.ok) {
+                const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0,10);
+                response = await fetch(url + yesterday + ".csv");
             }
-        }
-
-        function renderTable(data) {
-            const tbody = document.getElementById('table-body');
-            tbody.innerHTML = '';
-
-            data.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td class="px-6 py-5 font-mono font-semibold">${row.Ticker || ''}</td>
-                    <td class="px-6 py-5">
-                        <div class="font-medium">${row.Scenario || ''}</div>
-                    </td>
-                    <td class="px-6 py-5 font-semibold">${row.Current_Price || '—'}</td>
-                    <td class="px-6 py-5 text-sm">${row.Entry || ''}</td>
-                    <td class="px-6 py-5 text-sm">${row.Stop_Loss || ''}</td>
-                    <td class="px-6 py-5 text-sm">${row.Targets || ''}</td>
-                    <td class="px-6 py-5 text-xs">${row.R_R_Ratio || ''}<br><span class="text-emerald-600">${row.Est_Probability || ''}</span></td>
-                `;
-                tbody.appendChild(tr);
+            
+            const csv = await response.text();
+            const rows = csv.trim().split('\n');
+            const headers = rows[0].split(',');
+            
+            let html = '<tr>' + headers.map(h => `<th class="border p-2 bg-slate-800">${h}</th>`).join('') + '</tr>';
+            
+            rows.slice(1).forEach(row => {
+                const cols = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                html += '<tr>' + cols.map(c => `<td class="border p-2">${c.replace(/^"|"$/g,'')}</td>`).join('') + '</tr>';
             });
+            
+            document.getElementById('table').innerHTML = html;
+            document.getElementById('status').innerHTML = '✅ Loaded latest data';
         }
-
-        // Auto load on page open
-        window.onload = loadLatestCSV;
+        
+        loadData();
     </script>
 </body>
 </html>
