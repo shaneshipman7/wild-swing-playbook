@@ -89,6 +89,13 @@
                 .trim();
         }
 
+        function getNumericRR(val) {
+            if (!val) return 0;
+            // Extract the first number (e.g. "1:2.5+" → 2.5)
+            const match = String(val).match(/(\d+\.?\d*)/);
+            return match ? parseFloat(match[1]) : 0;
+        }
+
         function getNumericProbability(val) {
             if (!val) return 0;
             let str = String(val).replace('~', '').replace('%', '').trim();
@@ -96,14 +103,6 @@
             if (!numbers) return 0;
             const nums = numbers.map(Number);
             return Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
-        }
-
-        function getNumericRR(val) {
-            if (!val) return 0;
-            // For sorting: remove "+" and any text after it
-            let clean = String(val).replace('+', '').split(':')[0] || String(val);
-            const match = clean.match(/(\d+\.?\d*)/);
-            return match ? parseFloat(match[1]) : 0;
         }
 
         function getPctReturn(row) {
@@ -240,7 +239,7 @@
                     } else if (h === 'Est_Probability') {
                         val = val ? `<span class="font-mono">${val}</span>` : '-';
                     } else if (h === 'R_R_Ratio') {
-                        val = cleanText(val);                    // Keep the + for display
+                        val = cleanText(val);   // Keep the + for display
                     } else if (h === 'Pct_Return') {
                         const pct = getPctReturn(row);
                         val = pct ? `<span class="font-mono text-emerald-400 font-bold">+${pct}%</span>` : '-';
