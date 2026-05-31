@@ -2,8 +2,11 @@ name: Update Wild Swing Playbook
 
 on:
   schedule:
-    - cron: '0 14 * * *'     # Runs at 9:00 AM CDT (14:00 UTC)
-  workflow_dispatch:         # Allows manual trigger
+    - cron: '0 14 * * *'     # 9:00 AM CDT
+  workflow_dispatch:
+
+permissions:
+  contents: write     # ← This is the key fix
 
 jobs:
   update:
@@ -12,6 +15,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}   # Ensures proper permissions
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -29,6 +34,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Master_Playbook_Database_*.csv Playbook_Watchlist_Import_*.txt
-          git commit -m "Daily update: New playbook data + prices" || echo "No changes to commit"
-          git push
+          
+          if git diff --quiet HEAD -- Master_Playbook_Database_*.csv Playbook_Watchlist_Import_*.txt; then
+            echo "No changes to commit"
+          else
+            git add Master_Playbook_Database_*.csv Playbook_Watchlist_Import_*.txt
+            git commit -m "Daily update: New playbook data + prices"
+            git push
+          fi
