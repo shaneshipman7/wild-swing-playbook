@@ -9,7 +9,7 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased selection:bg-teal-500/30">
 
-    <div class="w-full max-w-[1700px] mx-auto p-4 sm:p-6 lg:p-8">
+    <div class="w-full px-4 sm:px-6 lg:px-8 py-6">
         
         <header class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
             <div>
@@ -43,7 +43,7 @@
         </div>
 
         <div class="w-full overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/30 backdrop-blur-xl shadow-2xl">
-            <table class="w-full text-left border-collapse table-auto min-w-[1400px]">
+            <table class="w-full text-left border-collapse table-auto min-w-[1500px]">
                 <thead>
                     <tr id="tableHeaders" class="bg-slate-900/90 border-b border-slate-700 text-slate-100 text-base font-extrabold uppercase tracking-wider select-none">
                         </tr>
@@ -65,7 +65,6 @@
         let globalHeaders = [];
         let sortDirection = {};
 
-        // Hidden system columns to keep the UI elegant
         const hiddenColumns = ['Post_Title', 'Price_Updated'];
 
         function formatHeaderLabel(header) {
@@ -75,7 +74,6 @@
             return header.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         }
 
-        // Dynamic Trade Status Tracking Engine
         function calculatePlayStatus(row) {
             const currentPrice = parseFloat(row['Current_Price']);
             const entryText = String(row['Entry']);
@@ -128,7 +126,6 @@
                 currentData = parsedResults.data;
                 globalHeaders = parsedResults.meta.fields;
 
-                // Inject Custom Tracking Status column directly behind Ticker column
                 if (!globalHeaders.includes('Play_Status')) {
                     globalHeaders.splice(2, 0, 'Play_Status');
                 }
@@ -156,8 +153,10 @@
             const headerContainer = document.getElementById('tableHeaders');
             headerContainer.innerHTML = headers.map(h => {
                 if (hiddenColumns.includes(h)) return ''; 
+                // Added high right-side padding to the very last column header to match table styling
+                const isLast = h === headers[headers.length - 1] ? 'pr-12' : '';
                 return `
-                    <th class="p-5 cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors text-base font-black tracking-wide" onclick="sortTable('${h}')">
+                    <th class="p-5 ${isLast} cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors text-base font-black tracking-wide" onclick="sortTable('${h}')">
                         <div class="flex items-center gap-1.5 whitespace-nowrap">
                             <span>${formatHeaderLabel(h)}</span>
                             <span class="text-slate-500 text-sm">↕️</span>
@@ -199,7 +198,8 @@
                     } else if (h === 'Scenario') {
                         cellClass += " font-bold text-slate-100 max-w-sm text-base leading-relaxed";
                     } else if (h === 'Current_Price') {
-                        cellClass += " min-w-[140px] whitespace-nowrap";
+                        // Added right margin cushion padding (pr-12) to current price column cells
+                        cellClass += " min-w-[160px] whitespace-nowrap pr-12";
                         val = (val && !isNaN(parseFloat(val))) ? `<span class="text-emerald-400 font-mono font-black text-xl bg-emerald-500/5 px-2.5 py-1.5 rounded-lg border border-emerald-500/10">$${parseFloat(val).toFixed(2)}</span>` : `<span class="text-slate-600 font-mono font-bold">-</span>`;
                     } else if (h === 'Entry' || h === 'Stop_Loss' || h === 'Targets') {
                         cellClass += " font-mono text-sm text-slate-200 max-w-xs leading-relaxed font-bold";
