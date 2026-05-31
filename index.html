@@ -24,12 +24,12 @@
             overflow: auto;
         }
         .table-cell {
-            font-size: 1.25rem; /* Bigger text */
+            font-size: 1.25rem;
             line-height: 1.5;
             font-weight: 600;
         }
         .header-cell {
-            font-size: 1.05rem; /* Bigger headers */
+            font-size: 1.05rem;
             line-height: 1.35;
             white-space: nowrap;
             font-weight: 700;
@@ -127,22 +127,48 @@
 
         async function loadData() {
             try {
-                let res = await fetch(baseUrl + new Date().toISOString().slice(0,10) + ".csv");
-                if (!res.ok) res = await fetch(baseUrl + new Date(Date.now()-864e5).toISOString().slice(0,10) + ".csv");
-                const text = await res.text();
+                const today = new Date().toISOString().slice(0,10);
+                const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0,10);
+                
+                let urls = [
+                    baseUrl + today + ".csv",
+                    baseUrl + yesterday + ".csv"
+                ];
+
+                let text = null;
+                for (let url of urls) {
+                    try {
+                        const res = await fetch(url);
+                        if (res.ok) {
+                            text = await res.text();
+                            console.log("✅ Loaded:", url);
+                            break;
+                        }
+                    } catch(e) {}
+                }
+
+                if (!text) {
+                    console.error("❌ No CSV file found for today or yesterday");
+                    return;
+                }
+
                 const parsed = Papa.parse(text, {header: true, skipEmptyLines: true});
-               
                 currentData = parsed.data;
+                
                 globalHeaders = parsed.meta.fields;
-               
+                
                 if (!globalHeaders.includes('Play_Status')) {
                     globalHeaders.splice(2, 0, 'Play_Status');
                 }
                 globalHeaders = globalHeaders.filter(h => h !== 'Date');
                 globalHeaders.push('Date');
+
                 renderHeaders();
                 renderTable(currentData);
-            } catch(e) { console.error(e); }
+                
+            } catch(e) { 
+                console.error("Failed to load data:", e); 
+            }
         }
 
         function renderHeaders() {
@@ -189,7 +215,6 @@
                     }
                     else if (h === 'Scenario') {
                         cls += " scenario-cell";
-                        // Improve readability of crammed scenario text
                         val = val.replace(/([a-z])([A-Z])/g, '$1 $2')
                                 .replace(/Buy([A-Z])/g, 'Buy $1')
                                 .replace(/([A-Z]{2,})([A-Z][a-z])/g, '$1 $2');
