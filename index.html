@@ -129,26 +129,31 @@
             try {
                 const today = new Date().toISOString().slice(0,10);
                 const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0,10);
-                
+                const dayBefore = new Date(Date.now() - 2*864e5).toISOString().slice(0,10);
+
                 let urls = [
                     baseUrl + today + ".csv",
-                    baseUrl + yesterday + ".csv"
+                    baseUrl + yesterday + ".csv",
+                    baseUrl + dayBefore + ".csv"
                 ];
 
                 let text = null;
+                let loadedUrl = "";
+
                 for (let url of urls) {
                     try {
                         const res = await fetch(url);
                         if (res.ok) {
                             text = await res.text();
-                            console.log("✅ Loaded:", url);
+                            loadedUrl = url;
+                            console.log("✅ Successfully loaded:", url);
                             break;
                         }
                     } catch(e) {}
                 }
 
                 if (!text) {
-                    console.error("❌ No CSV file found for today or yesterday");
+                    console.error("❌ Could not find any CSV file for the last 3 days");
                     return;
                 }
 
@@ -165,6 +170,7 @@
 
                 renderHeaders();
                 renderTable(currentData);
+                console.log(`✅ Loaded ${currentData.length} rows successfully from ${loadedUrl}`);
                 
             } catch(e) { 
                 console.error("Failed to load data:", e); 
