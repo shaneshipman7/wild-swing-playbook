@@ -2,8 +2,10 @@ import feedparser
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 from datetime import datetime, timedelta
-import os
 import pandas as pd
+import yfinance as yf
+import time
+import os
 
 # ================== CONFIG ==================
 DAYS_BACK = 7
@@ -51,9 +53,13 @@ def get_latest_playbook_plays():
                     cells = [cell.get_text(strip=True) for cell in row.find_all(["td", "th"])]
                     if len(cells) < 7: continue
                     trade_rows.append({
-                        "Date": date_str, "Ticker": title.split()[0] if title.split() and title.split()[0].isupper() else "MULTI",
-                        "Post_Title": title, "Scenario": cells[0], "Entry": cells[1],
-                        "Stop_Loss": cells[2], "Targets": cells[3],
+                        "Date": date_str, 
+                        "Ticker": title.split()[0] if title.split() and title.split()[0].isupper() else "MULTI",
+                        "Post_Title": title, 
+                        "Scenario": cells[0], 
+                        "Entry": cells[1],
+                        "Stop_Loss": cells[2], 
+                        "Targets": cells[3],
                         "R_R_Ratio": cells[5] if len(cells) > 5 else "",
                         "Est_Probability": cells[6] if len(cells) > 6 else "",
                         "Link": link
@@ -64,9 +70,12 @@ def get_latest_playbook_plays():
                     cells = [cell.get_text(strip=True) for cell in row.find_all(["td", "th"])]
                     if len(cells) < 4: continue
                     trade_rows.append({
-                        "Date": date_str, "Ticker": cells[0].replace("**", "").strip(),
-                        "Post_Title": title, "Scenario": "Rebound Play",
-                        "Entry": cells[1], "Stop_Loss": "See full post (~12% typical)",
+                        "Date": date_str, 
+                        "Ticker": cells[0].replace("**", "").strip(),
+                        "Post_Title": title, 
+                        "Scenario": "Rebound Play",
+                        "Entry": cells[1], 
+                        "Stop_Loss": "See full post (~12% typical)",
                         "Targets": f"Cons: {cells[2]} | Bull: {cells[3]}" if len(cells) > 3 else cells[2],
                         "R_R_Ratio": cells[4] if len(cells) > 4 else "",
                         "Est_Probability": cells[5] if len(cells) > 5 else "",
@@ -95,6 +104,21 @@ def get_conviction_score(row):
     return "🔥 HIGH" if score >= 65 else "⚡ MEDIUM" if score >= 45 else "📉 LOW"
 
 
+def fetch_current_prices(tickers):
+    print("📈 Fetching current prices...")
+    prices = {}
+    for ticker in set(tickers):
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period="2d")
+            if not hist.empty:
+                prices[ticker] = round(hist['Close'].iloc[-1], 2)
+            time.sleep(0.6)  # Be respectful to Yahoo
+        except:
+            prices[ticker] = None
+    return prices
+
+
 def print_pretty_alerts(df):
     if df.empty:
         print("✅ No plays found in the last", DAYS_BACK, "days.")
@@ -119,34 +143,17 @@ def print_pretty_alerts(df):
 if __name__ == "__main__":
     df, playbooks = get_latest_playbook_plays()
     
-    # Pretty alerts (now shows every run)
     print_pretty_alerts(df)
     
-    # Your original file outputs
     if not df.empty:
         today_str = datetime.now().strftime("%Y-%m-%d")
         
-        # Markdown Playbook
-        playbooks.sort(key=lambda x: x["date"], reverse=True)
-        md_filename = f"Master_Swing_Trading_Playbook_{today_str}.md"
-        with open(md_filename, "w", encoding="utf-8") as f:
-            f.write(f"# Master Swing Trading Playbook - {datetime.now().strftime('%B %d, %Y')}\n\n")
-            f.write(f"**Generated from Wild Swing Trades**  \n")
-            f.write(f"Last {DAYS_BACK} days • {len(playbooks)} playbooks\n\n")
-            for i, pb in enumerate(playbooks, 1):
-                anchor = pb['title'].lower().replace(' ', '-').replace('.', '')
-                f.write(f"{i}. [{pb['title']}](#{anchor})\n")
-            f.write("\n---\n\n")
-            for pb in playbooks:
-                anchor = pb['title'].lower().replace(' ', '-').replace('.', '')
-                f.write(f"<a id=\"{anchor}\"></a>\n")
-                f.write(f"## {pb['title']}\n\n")
-                f.write(f"**Published:** {pb['date']}  \n")
-                f.write(f"**Original post:** [{pb['link']}]({pb['link']})\n\n")
-                f.write(pb['content'])
-                f.write("\n\n---\n\n")
+        # Add current prices
+        prices = fetch_current_prices(df["Ticker"].tolist())
+        df["Current_Price"] = df["Ticker"].map(prices)
+        df["Price_Updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
         
-        # CSV Database
+        # Save files
         csv_filename = f"Master_Playbook_Database_{today_str}.csv"
         df.to_csv(csv_filename, index=False)
         
@@ -156,8 +163,8 @@ if __name__ == "__main__":
         with open(tv_filename, "w") as f:
             f.write(",".join(unique_tickers))
         
-        print(f"✅ Success!")
-        print(f"   📄 Markdown → {md_filename}")
-        print(f"   📊 Database CSV → {csv_filename} ({len(df)} rows)")
-        print(f"   📋 TradingView file → {tv_filename} ({len(unique_tickers)} unique tickers)")
-        print("   Ready to import in 1 click!")
+        print(f"\n✅ Success!")
+        print(f"   📊 CSV Database → {csv_filename} ({len(df)} rows)")
+        print(f"   📋 TradingView file → {tv_filename} ({len(unique_tickers)} tickers)")
+        print(f"   📈 Prices updated for {sum(1 for v in prices.values() if v is not None)} tickers")
+        print(f"   📈 Prices updated for {sum(1 for v in prices.values() if v is not None)} tickers")
