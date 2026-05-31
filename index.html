@@ -6,8 +6,27 @@
     <title>Wild Swing Trades • Live Playbook</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        /* Bulletproof scrollbar enforcement override */
+        .force-scrollbar::-webkit-scrollbar {
+            height: 12px !important;
+            display: block !important;
+        }
+        .force-scrollbar::-webkit-scrollbar-track {
+            background: #020617 !important; /* matches slate-950 */
+            border-radius: 8px;
+        }
+        .force-scrollbar::-webkit-scrollbar-thumb {
+            background: #1e293b !important; /* matches slate-800 */
+            border: 3px solid #020617 !important;
+            border-radius: 8px;
+        }
+        .force-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #334155 !important; /* matches slate-700 */
+        }
+    </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased selection:bg-teal-500/30">
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased selection:bg-teal-500/30 overflow-x-hidden">
 
     <div class="w-full px-4 sm:px-6 lg:px-8 py-6">
         
@@ -38,12 +57,12 @@
             </div>
         </div>
 
-        <div class="text-xs text-teal-400 font-bold mb-2 animate-pulse flex items-center gap-1">
-            <span>↔️</span> Swipe or scroll horizontally to view full targets and current prices
+        <div class="text-sm text-teal-400 font-bold mb-3 flex items-center gap-2 bg-teal-500/5 border border-teal-500/10 px-4 py-2.5 rounded-xl w-fit">
+            <span>↔️</span> Use the scrollbar at the bottom of the table to slide out to full Targets and Current Prices.
         </div>
 
-        <div class="w-full overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/30 backdrop-blur-xl shadow-2xl">
-            <table class="w-full text-left border-collapse table-auto min-w-[1500px]">
+        <div class="w-full overflow-x-auto force-scrollbar rounded-2xl border border-slate-800 bg-slate-900/30 backdrop-blur-xl shadow-2xl">
+            <table class="text-left border-collapse table-fixed w-[1600px]">
                 <thead>
                     <tr id="tableHeaders" class="bg-slate-900/90 border-b border-slate-700 text-slate-100 text-base font-extrabold uppercase tracking-wider select-none">
                         </tr>
@@ -66,6 +85,21 @@
         let sortDirection = {};
 
         const hiddenColumns = ['Post_Title', 'Price_Updated'];
+
+        // Strict proportional spacing map to prevent the table columns from resizing randomly
+        const columnWidths = {
+            'Date': 'w-[120px]',
+            'Ticker': 'w-[100px]',
+            'Play_Status': 'w-[140px]',
+            'Scenario': 'w-[320px]',
+            'Entry': 'w-[200px]',
+            'Stop_Loss': 'w-[160px]',
+            'Targets': 'w-[200px]',
+            'R_R_Ratio': 'w-[110px]',
+            'Est_Probability': 'w-[110px]',
+            'Link': 'w-[100px]',
+            'Current_Price': 'w-[140px]'
+        };
 
         function formatHeaderLabel(header) {
             if (header === 'R_R_Ratio') return 'R:R Ratio';
@@ -153,9 +187,9 @@
             const headerContainer = document.getElementById('tableHeaders');
             headerContainer.innerHTML = headers.map(h => {
                 if (hiddenColumns.includes(h)) return ''; 
-                const isLast = h === headers[headers.length - 1] ? 'pr-12' : '';
+                const widthClass = columnWidths[h] || 'w-[150px]';
                 return `
-                    <th class="p-5 ${isLast} cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors text-base font-black tracking-wide" onclick="sortTable('${h}')">
+                    <th class="p-5 ${widthClass} cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors text-base font-black tracking-wide" onclick="sortTable('${h}')">
                         <div class="flex items-center gap-1.5 whitespace-nowrap">
                             <span>${formatHeaderLabel(h)}</span>
                             <span class="text-slate-500 text-sm">↕️</span>
@@ -183,28 +217,26 @@
                     if (hiddenColumns.includes(h)) return; 
                     
                     let val = row[h] || '';
-                    let cellClass = "p-5 align-middle whitespace-normal break-words";
+                    const widthClass = columnWidths[h] || 'w-[150px]';
+                    let cellClass = `p-5 align-middle ${widthClass} break-words`;
                     
                     if (h === 'Play_Status') {
-                        cellClass += " text-center whitespace-nowrap min-w-[120px]";
+                        cellClass += " text-center";
                         val = calculatePlayStatus(row);
                     } else if (h === 'Ticker') {
-                        cellClass += " whitespace-nowrap";
                         val = `<span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-black bg-blue-500/10 text-blue-400 border border-blue-500/30 tracking-wider">${val}</span>`;
                     } else if (h === 'Link') {
-                        cellClass += " whitespace-nowrap";
                         val = `<a href="${val}" target="_blank" class="inline-flex items-center gap-1.5 text-sm text-teal-400 hover:text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 px-3.5 py-2 rounded-xl border border-teal-500/30 transition-all font-bold shadow-sm">View 🔗</a>`;
                     } else if (h === 'Scenario') {
-                        cellClass += " font-bold text-slate-100 max-w-sm text-base leading-relaxed";
+                        cellClass += " font-bold text-slate-100 text-base leading-relaxed";
                     } else if (h === 'Current_Price') {
-                        cellClass += " min-w-[160px] whitespace-nowrap pr-12";
                         val = (val && !isNaN(parseFloat(val))) ? `<span class="text-emerald-400 font-mono font-black text-xl bg-emerald-500/5 px-2.5 py-1.5 rounded-lg border border-emerald-500/10">$${parseFloat(val).toFixed(2)}</span>` : `<span class="text-slate-600 font-mono font-bold">-</span>`;
                     } else if (h === 'Entry' || h === 'Stop_Loss' || h === 'Targets') {
-                        cellClass += " font-mono text-sm text-slate-200 max-w-xs leading-relaxed font-bold";
+                        cellClass += " font-mono text-sm text-slate-200 leading-relaxed font-bold";
                     } else if (h === 'Est_Probability' || h === 'R_R_Ratio') {
                         cellClass += " font-mono text-base font-extrabold text-slate-400 text-center";
                     } else if (h === 'Date') {
-                        cellClass += " text-slate-400 font-bold text-sm whitespace-nowrap";
+                        cellClass += " text-slate-400 font-bold text-sm";
                     }
                     
                     rowHtml += `<td class="${cellClass}">${val}</td>`;
