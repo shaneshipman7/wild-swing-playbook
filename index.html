@@ -27,8 +27,14 @@
                     </h1>
                     <p class="text-slate-300 text-xl mt-1 font-bold">Live Playbook • Active Database</p>
                 </div>
-                <div class="px-5 py-2 bg-emerald-900/60 border border-emerald-500 rounded-2xl text-emerald-400 font-bold flex items-center gap-2 text-sm">
-                    ● LIVE
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" id="showPassed" class="w-4 h-4 accent-emerald-500">
+                        <span>Show PASSED trades</span>
+                    </label>
+                    <div class="px-5 py-2 bg-emerald-900/60 border border-emerald-500 rounded-2xl text-emerald-400 font-bold flex items-center gap-2 text-sm">
+                        ● LIVE
+                    </div>
                 </div>
             </div>
         </header>
@@ -53,6 +59,7 @@
         let currentData = [];
         let globalHeaders = [];
         let sortDirection = {};
+        let showPassed = false;
         const hiddenColumns = ['Post_Title', 'Price_Updated'];
         const columnWidths = {
             'Ticker': '115px', 'Play_Status': '165px', 'Scenario': '520px',
@@ -143,6 +150,11 @@
             return `<span class="inline-flex px-4 py-1.5 rounded-lg text-sm font-bold ${styles[status]}">${status}</span>`;
         }
 
+        function shouldShowRow(row) {
+            if (showPassed) return true;
+            return getPlayStatusValue(row) !== 'PASSED';
+        }
+
         async function loadData() {
             try {
                 const today = new Date().toISOString().slice(0,10);
@@ -194,13 +206,16 @@
 
         function renderTable(data) {
             const tbody = document.getElementById('tableBody');
-            if (!data || !data.length) {
+            const filteredData = data.filter(shouldShowRow);
+
+            if (!filteredData.length) {
                 document.getElementById('emptyState').classList.remove('hidden');
+                tbody.innerHTML = '';
                 return;
             }
             document.getElementById('emptyState').classList.add('hidden');
 
-            tbody.innerHTML = data.map(row => {
+            tbody.innerHTML = filteredData.map(row => {
                 let html = `<div class="flex hover:bg-slate-800/70 border-b border-slate-800 last:border-b-0">`;
                 globalHeaders.forEach(h => {
                     if (hiddenColumns.includes(h)) return;
@@ -240,24 +255,15 @@
             currentData.sort((a, b) => {
                 let va, vb;
 
-                if (key === 'Est_Probability') {
-                    va = getNumericProbability(a[key]);
-                    vb = getNumericProbability(b[key]);
-                } else if (key === 'Pct_Return') {
-                    va = getPctReturn(a);
-                    vb = getPctReturn(b);
-                } else if (key === 'R_R_Ratio') {
-                    va = getNumericRR(a[key]);
-                    vb = getNumericRR(b[key]);
-                } else if (key === 'Play_Status') {
-                    va = getPlayStatusValue(a);
-                    vb = getPlayStatusValue(b);
-                } else {
+                if (key === 'Est_Probability') va = getNumericProbability(a[key]);
+                else if (key === 'Pct_Return') va = getPctReturn(a);
+                else if (key === 'R_R_Ratio') va = getNumericRR(a[key]);
+                else if (key === 'Play_Status') va = getPlayStatusValue(a);
+                else {
                     va = a[key] || '';
                     vb = b[key] || '';
                 }
 
-                // Numeric sort
                 if (!isNaN(va) && !isNaN(vb)) {
                     return asc ? va - vb : vb - va;
                 }
@@ -269,11 +275,18 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            const passedToggle = document.getElementById('showPassed');
+            passedToggle.addEventListener('change', (e) => {
+                showPassed = e.target.checked;
+                renderTable(currentData);
+            });
+
             document.getElementById('searchInput').addEventListener('input', (e) => {
                 const term = e.target.value.toLowerCase().trim();
                 const filtered = term ? currentData.filter(row => Object.values(row).some(v => String(v).toLowerCase().includes(term))) : currentData;
                 renderTable(filtered);
             });
+
             loadData();
         });
     </script>
