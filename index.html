@@ -72,9 +72,17 @@
             return map[h] || h.replace(/_/g, ' ').toUpperCase();
         }
 
+        // Improved: handles ranges like "65-75%" → returns 70
         function getNumericProbability(val) {
             if (!val) return 0;
-            return parseFloat(String(val).replace('%', '').trim()) || 0;
+            const str = String(val).trim();
+            const matches = str.match(/\d+/g);
+            if (!matches) return 0;
+            
+            const numbers = matches.map(Number);
+            if (numbers.length === 1) return numbers[0];
+            // Average of range
+            return Math.round(numbers.reduce((a, b) => a + b, 0) / numbers.length);
         }
 
         function getNumericRR(val) {
@@ -232,7 +240,6 @@
                 let va = a[key] || '';
                 let vb = b[key] || '';
 
-                // Clean and convert for sorting
                 if (key === 'Est_Probability') {
                     va = getNumericProbability(va);
                     vb = getNumericProbability(vb);
@@ -247,12 +254,10 @@
                     vb = getPlayStatusValue(b);
                 }
 
-                // Numeric sort
                 if (!isNaN(parseFloat(va)) && !isNaN(parseFloat(vb))) {
                     return asc ? parseFloat(va) - parseFloat(vb) : parseFloat(vb) - parseFloat(va);
                 }
 
-                // Text sort fallback
                 return asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
             });
 
