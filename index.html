@@ -72,13 +72,11 @@
             return map[h] || h.replace(/_/g, ' ').toUpperCase();
         }
 
-        // Robust probability parser
         function getNumericProbability(val) {
             if (!val) return 0;
             let str = String(val).replace('~', '').replace('%', '').trim();
             const numbers = str.match(/\d+/g);
-            if (!numbers || numbers.length === 0) return 0;
-            
+            if (!numbers) return 0;
             const nums = numbers.map(Number);
             return Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
         }
@@ -89,19 +87,23 @@
             return match ? parseFloat(match[1]) : 0;
         }
 
+        // Improved % Return calculation
         function getPctReturn(row) {
             const entryStr = String(row.Entry || '');
             const targetsStr = String(row.Targets || '');
-            const entryNums = entryStr.match(/\d+(\.\d+)?/g) || [];
-            const targetNums = targetsStr.match(/\d+(\.\d+)?/g) || [];
+            
+            const entryNums = entryStr.match(/\d+\.?\d*/g) || [];
+            const targetNums = targetsStr.match(/\d+\.?\d*/g) || [];
             
             if (!entryNums.length || !targetNums.length) return 0;
-            
+
             const entryPrice = parseFloat(entryNums[0]);
-            const bestTarget = Math.max(...targetNums.map(Number));
+            const bestTarget = Math.max(...targetNums.map(n => parseFloat(n)));
             
-            if (entryPrice <= 0) return 0;
-            return Math.round(((bestTarget - entryPrice) / entryPrice) * 100);
+            if (entryPrice <= 0 || bestTarget <= entryPrice) return 0;
+            
+            const pct = Math.round(((bestTarget - entryPrice) / entryPrice) * 100);
+            return Math.min(pct, 500); // Cap at 500% to prevent crazy numbers
         }
 
         function getPlayStatusValue(row) {
