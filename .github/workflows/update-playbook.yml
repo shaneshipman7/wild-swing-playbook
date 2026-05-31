@@ -2,16 +2,22 @@ name: Update Wild Swing Playbook Data
 
 on:
   schedule:
-    - cron: '0 */6 * * *'    # Runs every 6 hours
-  workflow_dispatch:         # Allows manual trigger
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    
+    # ← This is the most important part
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        persist-credentials: false   # Important for push
 
     - name: Set up Python
       uses: actions/setup-python@v5
