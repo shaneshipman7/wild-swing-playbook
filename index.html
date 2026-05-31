@@ -9,7 +9,7 @@
     
     <style>
         .custom-scroll::-webkit-scrollbar {
-            height: 16px;
+            height: 18px;
             display: block;
         }
         .custom-scroll::-webkit-scrollbar-track {
@@ -25,39 +25,40 @@
             background: #64748b;
         }
 
-        /* Better mobile text scaling */
         .table-cell {
-            font-size: 1.05rem;
-            line-height: 1.4;
+            font-size: 1.1rem;
+            line-height: 1.5;
         }
         
         @media (max-width: 768px) {
             .table-cell {
-                font-size: 0.95rem;
+                font-size: 1rem;
             }
-            .header-cell {
-                font-size: 0.875rem;
-            }
+        }
+
+        .scenario-cell {
+            white-space: normal !important;
+            line-height: 1.45;
         }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased overflow-x-hidden">
-    <div class="w-full px-4 sm:px-6 lg:px-8 py-6 max-w-[100vw]">
+    <div class="w-full px-4 sm:px-6 lg:px-8 py-8 max-w-[100vw]">
        
-        <header class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
+        <header class="mb-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
             <div>
                 <h1 class="text-4xl md:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-teal-400 to-emerald-400 flex items-center gap-3">
                     <span>📈</span> Wild Swing Trades
                 </h1>
-                <p class="text-slate-300 text-xl md:text-2xl mt-1 font-bold">Live Playbook • Active Database</p>
+                <p class="text-slate-300 text-xl md:text-2xl mt-1 font-bold">Live Playbook • Active Database Viewer</p>
             </div>
             
-            <div id="status" class="inline-flex items-center gap-2 bg-slate-900/80 border border-slate-800 px-6 py-3 rounded-full text-lg text-amber-400 font-bold shadow-xl">
+            <div id="status" class="inline-flex items-center gap-2 bg-slate-900/80 border border-slate-800 px-6 py-3 rounded-full text-lg text-emerald-400 font-bold shadow-xl">
                 <span class="relative flex h-3 w-3">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
                 </span>
-                Loading real-time data...
+                Live System Connected
             </div>
         </header>
 
@@ -68,18 +69,17 @@
                        class="w-full bg-slate-900 border border-slate-700 rounded-2xl pl-12 pr-4 py-4 text-lg focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-500/20 text-slate-100 placeholder:text-slate-500 font-bold shadow-inner">
             </div>
             <div class="text-base font-bold text-slate-300 bg-slate-900/60 border border-slate-800 px-5 py-3 rounded-xl shadow-md">
-                Tip: Click headers to sort • Swipe horizontally on mobile
+                Tip: Click column headers to sort • Swipe horizontally on mobile
             </div>
         </div>
 
-        <div class="text-sm text-teal-400 font-bold mb-4 flex items-center gap-2 bg-teal-500/5 border border-teal-500/10 px-4 py-3 rounded-xl">
-            <span>↔️</span> Horizontal scroll enabled — swipe to see full targets & prices
+        <div class="text-sm text-teal-400 font-bold mb-5 flex items-center gap-2 bg-teal-500/5 border border-teal-500/10 px-5 py-3 rounded-xl">
+            ↔️ Horizontal scrolling enabled — swipe left/right to view full content
         </div>
 
         <div class="w-full overflow-x-auto custom-scroll rounded-3xl border border-slate-800 bg-slate-900/30 backdrop-blur-xl shadow-2xl">
-            <div class="min-w-[2000px] flex flex-col"> <!-- Slightly reduced from 2130px -->
-               
-                <div id="tableHeaders" class="flex bg-slate-900/90 border-b border-slate-700 text-slate-100 font-extrabold uppercase tracking-wider select-none sticky top-0 z-10">
+            <div class="min-w-[2600px] flex flex-col">   <!-- Much wider table -->
+                <div id="tableHeaders" class="flex bg-slate-900/95 border-b border-slate-700 text-slate-100 font-extrabold uppercase tracking-wider select-none sticky top-0 z-10">
                 </div>
                 
                 <div id="tableBody" class="flex flex-col divide-y divide-slate-800/80 text-slate-200 font-bold">
@@ -100,19 +100,19 @@
         let sortDirection = {};
         const hiddenColumns = ['Post_Title', 'Price_Updated'];
 
-        // Improved responsive column widths
+        // Wider, more comfortable column widths
         const columnWidths = {
-            'Date': '130px',
-            'Ticker': '110px',
-            'Play_Status': '165px',
-            'Scenario': '420px',
-            'Entry': '240px',
-            'Stop_Loss': '190px',
-            'Targets': '260px',
-            'R_R_Ratio': '130px',
-            'Est_Probability': '135px',
-            'Link': '100px',
-            'Current_Price': '145px'
+            'Date': '140px',
+            'Ticker': '120px',
+            'Play_Status': '180px',
+            'Scenario': '520px',      // Much wider
+            'Entry': '280px',
+            'Stop_Loss': '220px',
+            'Targets': '300px',       // Wider for target ranges
+            'R_R_Ratio': '140px',
+            'Est_Probability': '150px',
+            'Link': '110px',
+            'Current_Price': '160px'
         };
 
         function formatHeaderLabel(header) {
@@ -122,31 +122,35 @@
             return header.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         }
 
-        // ... (keep your calculatePlayStatus function unchanged) ...
-        function calculatePlayStatus(row) {
+        function getPlayStatusValue(row) {
             const currentPrice = parseFloat(row['Current_Price']);
-            const entryText = String(row['Entry']);
-           
-            if (!currentPrice || isNaN(currentPrice) || !entryText) {
-                return `<span class="inline-flex items-center px-4 py-1.5 rounded-lg text-sm font-black bg-slate-800 text-slate-400 border border-slate-700">TRACKING</span>`;
-            }
+            const entryText = String(row['Entry'] || '');
+            
+            if (!currentPrice || isNaN(currentPrice) || !entryText) return 'TRACKING';
+            
             const numbers = entryText.match(/\d+(\.\d+)?/g);
-            if (!numbers || numbers.length === 0) {
-                return `<span class="inline-flex items-center px-4 py-1.5 rounded-lg text-sm font-black bg-slate-800 text-slate-400 border border-slate-700">TRACKING</span>`;
-            }
-            const parsedEntries = numbers.map(Number);
-            const lowEntry = Math.min(...parsedEntries);
-            const highEntry = Math.max(...parsedEntries);
+            if (!numbers || numbers.length === 0) return 'TRACKING';
+            
+            const lowEntry = Math.min(...numbers.map(Number));
+            const highEntry = Math.max(...numbers.map(Number));
+            
+            if (entryText.toLowerCase().includes('above') && currentPrice >= lowEntry) return 'TRIGGERED';
+            if (currentPrice >= lowEntry && currentPrice <= (highEntry || lowEntry * 1.02)) return 'IN ZONE';
+            if (currentPrice < lowEntry) return 'PENDING';
+            return 'PASSED';
+        }
 
-            if (entryText.toLowerCase().includes('above') && currentPrice >= lowEntry) {
-                return `<span class="inline-flex items-center px-4 py-1.5 rounded-lg text-sm font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse">🎯 TRIGGERED</span>`;
-            } else if (currentPrice >= lowEntry && currentPrice <= (highEntry || lowEntry * 1.02)) {
-                return `<span class="inline-flex items-center px-4 py-1.5 rounded-lg text-sm font-black bg-teal-500/20 text-teal-300 border border-teal-500/40">🔥 IN ZONE</span>`;
-            } else if (currentPrice < lowEntry) {
-                return `<span class="inline-flex items-center px-4 py-1.5 rounded-lg text-sm font-black bg-amber-500/20 text-amber-400 border border-amber-500/40">⏳ PENDING</span>`;
-            } else {
-                return `<span class="inline-flex items-center px-4 py-1.5 rounded-lg text-sm font-black bg-purple-500/20 text-purple-400 border border-purple-500/40">🚀 PASSED</span>`;
-            }
+        function calculatePlayStatus(row) {
+            const status = getPlayStatusValue(row);
+            const styles = {
+                'TRIGGERED': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 animate-pulse',
+                'IN ZONE': 'bg-teal-500/20 text-teal-300 border-teal-500/40',
+                'PENDING': 'bg-amber-500/20 text-amber-400 border-amber-500/40',
+                'PASSED': 'bg-purple-500/20 text-purple-400 border-purple-500/40',
+                'TRACKING': 'bg-slate-800 text-slate-400 border-slate-700'
+            };
+            
+            return `<span class="inline-flex items-center px-5 py-2 rounded-xl text-base font-black border ${styles[status]}">${status}</span>`;
         }
 
         async function loadData() {
@@ -175,8 +179,6 @@
                 renderHeaders(globalHeaders);
                 renderTable(currentData, globalHeaders);
 
-                document.getElementById('status').innerHTML = `✅ <span class="text-emerald-400 font-extrabold">Live System Connected</span>`;
-
                 document.getElementById('searchInput').addEventListener('input', (e) => {
                     const term = e.target.value.toLowerCase();
                     const filtered = currentData.filter(item => 
@@ -194,9 +196,9 @@
             const container = document.getElementById('tableHeaders');
             container.innerHTML = headers.map(h => {
                 if (hiddenColumns.includes(h)) return '';
-                const width = columnWidths[h] || '160px';
+                const width = columnWidths[h] || '180px';
                 return `
-                    <div class="header-cell p-5 cursor-pointer hover:bg-slate-800/80 transition-colors text-left flex items-center gap-2 whitespace-nowrap border-r border-slate-800 last:border-r-0"
+                    <div class="p-6 cursor-pointer hover:bg-slate-800/80 transition-colors text-left flex items-center gap-2 whitespace-nowrap border-r border-slate-800 last:border-r-0"
                         style="width: ${width}; flex-shrink: 0;"
                         onclick="sortTable('${h}')">
                         <span>${formatHeaderLabel(h)}</span>
@@ -224,22 +226,24 @@
                     if (hiddenColumns.includes(h)) return;
                     
                     let val = row[h] || '';
-                    const width = columnWidths[h] || '160px';
-                    let cellClass = "table-cell p-5 flex items-center border-r border-slate-800 last:border-r-0";
+                    const width = columnWidths[h] || '180px';
+                    let cellClass = "table-cell p-6 flex items-center border-r border-slate-800 last:border-r-0";
 
                     if (h === 'Play_Status') {
                         cellClass += " justify-center";
                         val = calculatePlayStatus(row);
                     } else if (h === 'Ticker') {
-                        val = `<span class="inline-flex items-center px-3 py-1 rounded-lg text-base font-black bg-blue-500/10 text-blue-400 border border-blue-500/30">${val}</span>`;
+                        val = `<span class="inline-flex items-center px-4 py-2 rounded-xl text-lg font-black bg-blue-500/10 text-blue-400 border border-blue-500/30">${val}</span>`;
                     } else if (h === 'Link') {
-                        val = `<a href="${val}" target="_blank" class="inline-flex items-center gap-1.5 text-teal-400 hover:text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 px-4 py-2 rounded-xl border border-teal-500/30 font-bold">View 🔗</a>`;
+                        val = `<a href="${val}" target="_blank" class="inline-flex items-center gap-1.5 text-teal-400 hover:text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 px-5 py-3 rounded-xl border border-teal-500/30 font-bold">View 🔗</a>`;
                     } else if (h === 'Current_Price') {
-                        val = val ? `<span class="text-emerald-400 font-mono font-black text-xl">$${parseFloat(val).toFixed(2)}</span>` : '-';
+                        val = val ? `<span class="text-emerald-400 font-mono font-black text-2xl">$${parseFloat(val).toFixed(2)}</span>` : '-';
+                    } else if (h === 'Scenario') {
+                        cellClass += " scenario-cell";
                     } else if (['Entry', 'Stop_Loss', 'Targets'].includes(h)) {
                         cellClass += " font-mono text-base";
                     } else if (['Est_Probability', 'R_R_Ratio'].includes(h)) {
-                        cellClass += " font-mono justify-center";
+                        cellClass += " font-mono justify-center text-lg";
                     }
 
                     rowHtml += `<div class="${cellClass}" style="width: ${width}; flex-shrink: 0;">${val}</div>`;
@@ -255,12 +259,23 @@
             const isAsc = sortDirection[key] === 'asc';
 
             currentData.sort((a, b) => {
-                let valA = a[key] || '';
-                let valB = b[key] || '';
+                let valA, valB;
+
+                if (key === 'Play_Status') {
+                    valA = getPlayStatusValue(a);
+                    valB = getPlayStatusValue(b);
+                } else {
+                    valA = a[key] || '';
+                    valB = b[key] || '';
+                }
+
                 if (!isNaN(parseFloat(valA)) && !isNaN(parseFloat(valB))) {
                     return isAsc ? parseFloat(valA) - parseFloat(valB) : parseFloat(valB) - parseFloat(valA);
                 }
-                return isAsc ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+
+                return isAsc 
+                    ? String(valA).localeCompare(String(valB)) 
+                    : String(valB).localeCompare(String(valA));
             });
 
             renderTable(currentData, globalHeaders);
