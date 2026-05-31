@@ -72,14 +72,17 @@
             return map[h] || h.replace(/_/g, ' ').toUpperCase();
         }
 
+        // Improved cleaning to avoid double parentheses
         function cleanText(text) {
             if (!text) return '';
-            return String(text)
+            let cleaned = String(text)
                 .replace(/([a-z])([A-Z])/g, '$1 $2')
-                .replace(/(\d)\(/g, '$1 (')
-                .replace(/\)([a-zA-Z])/g, ') $1')
+                .replace(/(\d)\s*\(/g, '$1 (')           // number( → number (
+                .replace(/\)\s*([a-zA-Z])/g, ') $1')     // )word → ) word
+                .replace(/\(\s*\(/g, '(')                // remove double (( 
                 .replace(/\s+/g, ' ')
                 .trim();
+            return cleaned;
         }
 
         function getNumericProbability(val) {
