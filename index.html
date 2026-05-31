@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wild Swing Trades • Live Playbook</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
 
@@ -60,44 +61,13 @@
         let globalHeaders = [];
         let sortDirection = {};
 
-        // Columns we choose to hide to keep the view clean and compact
+        // Hidden system columns to keep the UI elegant
         const hiddenColumns = ['Post_Title', 'Price_Updated'];
 
         function formatHeaderLabel(header) {
             if (header === 'R_R_Ratio') return 'R:R Ratio';
             if (header === 'Est_Probability') return 'Est. Prob.';
             return header.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        }
-
-        // Advanced CSV Splitter that ignores commas buried inside quotes
-        function splitCSVLine(line) {
-            const result = [];
-            let current = '';
-            let inQuotes = false;
-            
-            for (let i = 0; i < line.length; i++) {
-                const char = line[i];
-                if (char === '"') {
-                    inQuotes = !inQuotes;
-                } else if (char === ',' && !inQuotes) {
-                    result.push(current.trim().replace(/^"|"$/g, ''));
-                    current = '';
-                } else {
-                    current += char;
-                }
-            }
-            result.push(current.trim().replace(/^"|"$/g, ''));
-            return result;
-        }
-
-        function parseCSV(text) {
-            const lines = text.trim().split('\n').filter(line => line.trim() !== '');
-            if (lines.length === 0 || !lines[0]) return { headers: [], rows: [] };
-            
-            const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-            const rows = lines.slice(1).map(line => splitCSVLine(line));
-            
-            return { headers, rows };
         }
 
         async function loadData() {
@@ -115,18 +85,15 @@
                 if (!response.ok) throw new Error("Could not find a recent database CSV.");
 
                 const csvText = await response.text();
-                const parsed = parseCSV(csvText);
-                
-                globalHeaders = parsed.headers;
 
-                // Process objects dynamically mapping columns to data rows
-                currentData = parsed.rows.map(row => {
-                    let obj = {};
-                    globalHeaders.forEach((header, index) => {
-                        obj[header] = row[index] || '';
-                    });
-                    return obj;
+                // Use PapaParse to safely handle multi-line fields and complex strings
+                const parsedResults = Papa.parse(csvText, {
+                    header: true,
+                    skipEmptyLines: true
                 });
+
+                currentData = parsedResults.data;
+                globalHeaders = parsedResults.meta.fields;
 
                 renderHeaders(globalHeaders);
                 renderTable(currentData, globalHeaders);
@@ -183,19 +150,19 @@
                     let val = row[h] || '';
                     let cellClass = "p-4 align-top whitespace-normal";
                     
-                    // Column mapping layouts 
+                    // Column formatting enhancements
                     if (h === 'Ticker') {
                         val = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">${val}</span>`;
                     } else if (h === 'Link') {
                         val = `<a href="${val}" target="_blank" class="inline-flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 bg-teal-500/5 hover:bg-teal-500/10 px-2.5 py-1.5 rounded-lg border border-teal-500/20 transition-all font-medium">Link 🔗</a>`;
                     } else if (h === 'Scenario') {
-                        cellClass += " font-medium text-slate-200 max-w-xs";
+                        cellClass += " font-medium text-slate-200 max-w-md";
                     } else if (h === 'Current_Price') {
-                        val = val ? `<span class="text-emerald-400 font-mono font-semibold">$${parseFloat(val).toFixed(2)}</span>` : `<span class="text-slate-600 font-mono">-</span>`;
+                        val = (val && !isNaN(parseFloat(val))) ? `<span class="text-emerald-400 font-mono font-semibold">$${parseFloat(val).toFixed(2)}</span>` : `<span class="text-slate-600 font-mono">-</span>`;
                     } else if (h === 'Entry' || h === 'Stop_Loss' || h === 'Targets') {
                         cellClass += " font-mono text-xs text-slate-300 max-w-xs";
-                    } else if (h === 'Est_Probability') {
-                        cellClass += " font-medium text-slate-400";
+                    } else if (h === 'Est_Probability' || h === 'R_R_Ratio') {
+                        cellClass += " font-mono text-sm text-slate-400";
                     }
                     
                     rowHtml += `<td class="${cellClass}">${val}</td>`;
@@ -214,7 +181,6 @@
                 let valA = a[key] || '';
                 let valB = b[key] || '';
                 
-                // If sorting by price or numeric variables, run float matching conversions
                 if (!isNaN(parseFloat(valA)) && isFinite(valA) && !isNaN(parseFloat(valB)) && isFinite(valB)) {
                     return isAsc ? parseFloat(valA) - parseFloat(valB) : parseFloat(valB) - parseFloat(valA);
                 }
