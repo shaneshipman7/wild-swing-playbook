@@ -72,15 +72,16 @@
             return map[h] || h.replace(/_/g, ' ').toUpperCase();
         }
 
+        // Better cleaning - more careful with parentheses
         function cleanText(text) {
             if (!text) return '';
-            return String(text)
+            let cleaned = String(text)
                 .replace(/([a-z])([A-Z])/g, '$1 $2')
-                .replace(/(\d)(\()/g, '$1 ($2')
-                .replace(/\)(\w)/g, ') $1')
-                .replace(/(\w)\(/g, '$1 (')
+                .replace(/(\d)\(/g, '$1 (')           // number( → number (
+                .replace(/\)([a-zA-Z])/g, ') $1')     // )word → ) word
                 .replace(/\s+/g, ' ')
                 .trim();
+            return cleaned;
         }
 
         function getNumericProbability(val) {
@@ -203,6 +204,7 @@
 
             tbody.innerHTML = data.map(row => {
                 let html = `<div class="flex hover:bg-slate-800/70 border-b border-slate-800 last:border-b-0">`;
+                
                 globalHeaders.forEach(h => {
                     if (hiddenColumns.includes(h)) return;
                     const w = columnWidths[h] || '160px';
