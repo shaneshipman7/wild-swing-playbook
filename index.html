@@ -4,14 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wild Swing Trades • Live Playbook</title>
-    <!-- Tailwind CSS for modern styling -->
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
 
     <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
         
-        <!-- Header Section -->
         <header class="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-800 pb-6">
             <div>
                 <h1 class="text-3xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-teal-400 to-emerald-400 flex items-center gap-3">
@@ -28,9 +26,7 @@
             </div>
         </header>
 
-        <!-- Controls Toolbar -->
         <div class="mb-6 flex flex-col sm:flex-row gap-4 items-center justify-between">
-            <!-- Search Bar -->
             <div class="relative w-full sm:w-72">
                 <span class="absolute left-3 top-2 text-slate-500 text-sm">🔍</span>
                 <input type="text" id="searchInput" placeholder="Filter by Ticker, Scenario..." 
@@ -41,21 +37,17 @@
             </div>
         </div>
 
-        <!-- Table Container -->
         <div class="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/40 backdrop-blur-md shadow-2xl">
             <table class="w-full text-left border-collapse">
                 <thead>
                     <tr id="tableHeaders" class="bg-slate-900/90 border-b border-slate-800 text-slate-300 text-xs font-semibold uppercase tracking-wider select-none">
-                        <!-- Dynamic headers get generated here -->
-                    </tr>
+                        </tr>
                 </thead>
                 <tbody id="tableBody" class="divide-y divide-slate-800/60 text-sm text-slate-300">
-                    <!-- Dynamic rows get generated here -->
-                </tbody>
+                    </tbody>
             </table>
         </div>
         
-        <!-- Empty State View -->
         <div id="emptyState" class="hidden text-center py-12 border border-dashed border-slate-800 rounded-xl mt-4">
             <div class="text-4xl mb-3">📁</div>
             <h3 class="text-slate-400 font-medium">No setups match your search filter</h3>
@@ -63,42 +55,47 @@
     </div>
 
     <script>
-        const baseUrl = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_";[cite: 1]
+        const baseUrl = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_";
         let currentData = [];
         let globalHeaders = [];
         let sortDirection = {};
 
-        // Helper: Format column headers to look human-readable
+        // Columns we choose to hide to keep the view clean and compact
+        const hiddenColumns = ['Post_Title', 'Price_Updated'];
+
         function formatHeaderLabel(header) {
+            if (header === 'R_R_Ratio') return 'R:R Ratio';
+            if (header === 'Est_Probability') return 'Est. Prob.';
             return header.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         }
 
-        // CSV Parser that elegantly handles internal commas locked inside quotation marks
+        // Advanced CSV Splitter that ignores commas buried inside quotes
+        function splitCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim().replace(/^"|"$/g, ''));
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current.trim().replace(/^"|"$/g, ''));
+            return result;
+        }
+
         function parseCSV(text) {
             const lines = text.trim().split('\n').filter(line => line.trim() !== '');
             if (lines.length === 0 || !lines[0]) return { headers: [], rows: [] };
             
             const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-            
-            const rows = lines.slice(1).map(line => {
-                const result = [];
-                let current = '';
-                let inQuotes = false;
-                
-                for (let i = 0; i < line.length; i++) {
-                    const char = line[i];
-                    if (char === '"') {
-                        inQuotes = !inQuotes;
-                    } else if (char === ',' && !inQuotes) {
-                        result.push(current.trim().replace(/^"|"$/g, ''));
-                        current = '';
-                    } else {
-                        current += char;
-                    }
-                }
-                result.push(current.trim().replace(/^"|"$/g, ''));
-                return result;
-            });
+            const rows = lines.slice(1).map(line => splitCSVLine(line));
             
             return { headers, rows };
         }
@@ -106,23 +103,23 @@
         async function loadData() {
             try {
                 let response;
-                const today = new Date().toISOString().slice(0,10);[cite: 1]
+                const today = new Date().toISOString().slice(0,10);
                 
-                response = await fetch(baseUrl + today + ".csv");[cite: 1]
+                response = await fetch(baseUrl + today + ".csv");
                 
-                if (!response.ok) {[cite: 1]
-                    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0,10);[cite: 1]
-                    response = await fetch(baseUrl + yesterday + ".csv");[cite: 1]
+                if (!response.ok) {
+                    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0,10);
+                    response = await fetch(baseUrl + yesterday + ".csv");
                 }
                 
                 if (!response.ok) throw new Error("Could not find a recent database CSV.");
 
-                const csvText = await response.text();[cite: 1]
+                const csvText = await response.text();
                 const parsed = parseCSV(csvText);
                 
                 globalHeaders = parsed.headers;
 
-                // Map rows into clean objects matching headers
+                // Process objects dynamically mapping columns to data rows
                 currentData = parsed.rows.map(row => {
                     let obj = {};
                     globalHeaders.forEach((header, index) => {
@@ -136,7 +133,7 @@
                 
                 document.getElementById('status').innerHTML = `✅ <span class="text-emerald-400 font-semibold">Live System Connected</span>`;
 
-                // Hook up the Search Box feature
+                // Live search controller mapping logic
                 document.getElementById('searchInput').addEventListener('input', (e) => {
                     const term = e.target.value.toLowerCase();
                     const filtered = currentData.filter(item => {
@@ -154,12 +151,12 @@
         function renderHeaders(headers) {
             const headerContainer = document.getElementById('tableHeaders');
             headerContainer.innerHTML = headers.map(h => {
-                if (h === 'Post_Title') return ''; 
+                if (hiddenColumns.includes(h)) return ''; 
                 return `
-                    <th class="p-4 cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors" onclick="sortTable('${h}')">
+                    <th class="p-4 cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors text-xs font-bold uppercase tracking-wider" onclick="sortTable('${h}')">
                         <div class="flex items-center gap-1.5">
                             <span>${formatHeaderLabel(h)}</span>
-                            <span class="text-slate-500 text-xs">↕️</span>
+                            <span class="text-slate-600 text-xs">↕️</span>
                         </div>
                     </th>
                 `;
@@ -181,21 +178,24 @@
                 let rowHtml = `<tr class="hover:bg-slate-900/60 transition-colors border-b border-slate-800/40">`;
                 
                 headers.forEach(h => {
-                    if (h === 'Post_Title') return; 
+                    if (hiddenColumns.includes(h)) return; 
                     
                     let val = row[h] || '';
                     let cellClass = "p-4 align-top whitespace-normal";
                     
+                    // Column mapping layouts 
                     if (h === 'Ticker') {
                         val = `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">${val}</span>`;
                     } else if (h === 'Link') {
-                        val = `<a href="${val}" target="_blank" class="inline-flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 bg-teal-500/5 hover:bg-teal-500/10 px-2.5 py-1.5 rounded-lg border border-teal-500/20 transition-all font-medium">View Post 🔗</a>`;
+                        val = `<a href="${val}" target="_blank" class="inline-flex items-center gap-1 text-xs text-teal-400 hover:text-teal-300 bg-teal-500/5 hover:bg-teal-500/10 px-2.5 py-1.5 rounded-lg border border-teal-500/20 transition-all font-medium">Link 🔗</a>`;
                     } else if (h === 'Scenario') {
                         cellClass += " font-medium text-slate-200 max-w-xs";
-                    } else if (h === 'Current_Price' && val) {
-                        val = `<span class="text-emerald-400 font-mono font-semibold">$${val}</span>`;[cite: 2]
-                    } else if ((h === 'Entry' || h === 'Stop_Loss' || h === 'Targets')) {
-                        cellClass += " font-mono text-xs text-slate-400 max-w-xs";
+                    } else if (h === 'Current_Price') {
+                        val = val ? `<span class="text-emerald-400 font-mono font-semibold">$${parseFloat(val).toFixed(2)}</span>` : `<span class="text-slate-600 font-mono">-</span>`;
+                    } else if (h === 'Entry' || h === 'Stop_Loss' || h === 'Targets') {
+                        cellClass += " font-mono text-xs text-slate-300 max-w-xs";
+                    } else if (h === 'Est_Probability') {
+                        cellClass += " font-medium text-slate-400";
                     }
                     
                     rowHtml += `<td class="${cellClass}">${val}</td>`;
@@ -214,6 +214,7 @@
                 let valA = a[key] || '';
                 let valB = b[key] || '';
                 
+                // If sorting by price or numeric variables, run float matching conversions
                 if (!isNaN(parseFloat(valA)) && isFinite(valA) && !isNaN(parseFloat(valB)) && isFinite(valB)) {
                     return isAsc ? parseFloat(valA) - parseFloat(valB) : parseFloat(valB) - parseFloat(valA);
                 }
