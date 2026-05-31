@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write     # ← This is the key fix
+  contents: write
 
 jobs:
   update:
@@ -14,9 +14,9 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6      # ← Updated
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}   # Ensures proper permissions
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
