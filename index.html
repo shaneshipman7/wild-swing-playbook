@@ -40,7 +40,7 @@
             <div class="text-sm text-slate-400">Click headers to sort • Scroll horizontally</div>
         </div>
         <div class="flex-1 table-wrapper custom-scroll border border-slate-800 bg-slate-900/70 backdrop-blur-xl rounded-2xl overflow-auto">
-            <div class="min-w-[2950px]">
+            <div class="min-w-[3100px]">
                 <div id="tableHeaders" class="flex sticky top-0 bg-slate-900 border-b border-slate-700 z-20"></div>
                 <div id="tableBody" class="flex flex-col text-slate-200"></div>
             </div>
@@ -94,7 +94,7 @@
             const entryPrice = parseFloat(entryNums[0]);
             const bestTarget = Math.max(...targetNums.map(Number));
             
-            if (entryPrice === 0) return 0;
+            if (entryPrice <= 0) return 0;
             return Math.round(((bestTarget - entryPrice) / entryPrice) * 100);
         }
 
@@ -156,7 +156,14 @@
                 currentData = parsed.data;
                 globalHeaders = parsed.meta.fields;
 
-                if (!globalHeaders.includes('Play_Status')) globalHeaders.splice(2, 0, 'Play_Status');
+                // Add Play_Status and Pct_Return columns
+                if (!globalHeaders.includes('Play_Status')) {
+                    globalHeaders.splice(2, 0, 'Play_Status');
+                }
+                if (!globalHeaders.includes('Pct_Return')) {
+                    globalHeaders.splice(globalHeaders.indexOf('R_R_Ratio') + 1, 0, 'Pct_Return');
+                }
+
                 globalHeaders = globalHeaders.filter(h => h !== 'Date');
                 globalHeaders.push('Date');
 
@@ -206,7 +213,7 @@
                         val = val ? `<span class="font-mono">${val}</span>` : '-';
                     } else if (h === 'Pct_Return') {
                         const pct = getPctReturn(row);
-                        val = pct ? `<span class="font-mono text-emerald-400">+${pct}%</span>` : '-';
+                        val = pct ? `<span class="font-mono text-emerald-400 font-bold">+${pct}%</span>` : '-';
                     }
                     html += `<div class="${cls}" style="width: ${w}; flex-shrink: 0;">${val}</div>`;
                 });
