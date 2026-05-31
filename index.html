@@ -257,13 +257,9 @@
                     vb = b[key] || '';
                 }
 
-                // Stronger numeric sort for % RETURN
-                if (key === 'Pct_Return') {
+                // Numeric sort
+                if (!isNaN(va) && !isNaN(vb)) {
                     return asc ? va - vb : vb - va;
-                }
-
-                if (!isNaN(parseFloat(va)) && !isNaN(parseFloat(vb))) {
-                    return asc ? parseFloat(va) - parseFloat(vb) : parseFloat(vb) - parseFloat(va);
                 }
 
                 return asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
