@@ -7,13 +7,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
-        /* Force custom scrollbar visibility across all modern web browsers */
+        /* Force custom scrollbar visibility across all modern desktop web browsers */
         .custom-scroll::-webkit-scrollbar {
-            height: 14px !important;
+            height: 12px !important;
             display: block !important;
         }
         .custom-scroll::-webkit-scrollbar-track {
-            background: #020617 !important; /* matches slate-950 */
+            background: #020617 !important; /* slate-950 */
             border-radius: 10px;
         }
         .custom-scroll::-webkit-scrollbar-thumb {
@@ -22,7 +22,7 @@
             border-radius: 10px;
         }
         .custom-scroll::-webkit-scrollbar-thumb:hover {
-            background: #475569 !important; /* slate-600 */
+            background: #475569 !important;
         }
     </style>
 </head>
@@ -58,16 +58,17 @@
         </div>
 
         <div class="text-sm text-teal-400 font-bold mb-4 flex items-center gap-2 bg-teal-500/5 border border-teal-500/10 px-4 py-3 rounded-xl w-fit">
-            <span>↔️</span> Use the slider rail at the bottom of the grid framework to scroll out right and view complete pricing matrices.
+            <span>↔️</span> Mobile & Desktop Optimization: Swipe or scroll horizontally to view full targets and prices.
         </div>
 
-        <div class="w-full overflow-x-auto custom-scroll rounded-2xl border border-slate-800 bg-slate-900/30 backdrop-blur-xl shadow-2xl">
-            <table class="text-left border-collapse table-fixed w-full">
+        <div class="w-full overflow-x-auto custom-scroll rounded-2xl border border-slate-800 bg-slate-900/30 backdrop-blur-xl shadow-2xl block">
+            
+            <table class="text-left border-collapse w-max table-auto">
                 <thead>
                     <tr id="tableHeaders" class="bg-slate-900/90 border-b border-slate-700 text-slate-100 text-base font-extrabold uppercase tracking-wider select-none">
                         </tr>
                 </thead>
-                <tbody id="tableBody" class="divide-y divide-slate-800/80 text-lg text-slate-200 font-semibold">
+                <tbody id="tableBody" class="divide-y divide-slate-800/80 text-xl text-slate-200 font-bold">
                     </tbody>
             </table>
         </div>
@@ -86,19 +87,19 @@
 
         const hiddenColumns = ['Post_Title', 'Price_Updated'];
 
-        // Strict widths mapped out in absolute pixels to ensure headers match rows perfectly
+        // Strict pixel sizing map. Since the table is set to w-max, these sizing parameters are completely non-negotiable.
         const columnWidths = {
             'Date': '140px',
             'Ticker': '120px',
             'Play_Status': '160px',
-            'Scenario': '380px',
+            'Scenario': '420px',
             'Entry': '260px',
             'Stop_Loss': '200px',
             'Targets': '260px',
-            'R_R_Ratio': '130px',
-            'Est_Probability': '130px',
-            'Link': '110px',
-            'Current_Price': '160px'
+            'R_R_Ratio': '140px',
+            'Est_Probability': '140px',
+            'Link': '120px',
+            'Current_Price': '180px'
         };
 
         function formatHeaderLabel(header) {
@@ -113,12 +114,12 @@
             const entryText = String(row['Entry']);
             
             if (!currentPrice || isNaN(currentPrice) || !entryText) {
-                return `<span class="inline-flex items-center px-3 py-1 rounded-md text-xs font-black bg-slate-800 text-slate-400 border border-slate-700 tracking-wider">TRACKING</span>`;
+                return `<span class="inline-flex items-center px-3 py-1 rounded-md text-sm font-black bg-slate-800 text-slate-400 border border-slate-700 tracking-wider">TRACKING</span>`;
             }
 
             const numbers = entryText.match(/\d+(\.\d+)?/g);
             if (!numbers || numbers.length === 0) {
-                return `<span class="inline-flex items-center px-3 py-1 rounded-md text-xs font-black bg-slate-800 text-slate-400 border border-slate-700 tracking-wider">TRACKING</span>`;
+                return `<span class="inline-flex items-center px-3 py-1 rounded-md text-sm font-black bg-slate-800 text-slate-400 border border-slate-700 tracking-wider">TRACKING</span>`;
             }
 
             const parsedEntries = numbers.map(Number);
@@ -126,13 +127,13 @@
             const highEntry = Math.max(...parsedEntries);
 
             if (entryText.toLowerCase().includes('above') && currentPrice >= lowEntry) {
-                return `<span class="inline-flex items-center px-3 py-1 rounded-md text-xs font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 tracking-wider animate-pulse">🎯 TRIGGERED</span>`;
+                return `<span class="inline-flex items-center px-3 py-1 rounded-md text-sm font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 tracking-wider animate-pulse">🎯 TRIGGERED</span>`;
             } else if (currentPrice >= lowEntry && currentPrice <= (highEntry || lowEntry * 1.02)) {
-                return `<span class="inline-flex items-center px-3 py-1 rounded-md text-xs font-black bg-teal-500/20 text-teal-300 border border-teal-500/40 tracking-wider">🔥 IN ZONE</span>`;
+                return `<span class="inline-flex items-center px-3 py-1 rounded-md text-sm font-black bg-teal-500/20 text-teal-300 border border-teal-500/40 tracking-wider">🔥 IN ZONE</span>`;
             } else if (currentPrice < lowEntry) {
-                return `<span class="inline-flex items-center px-3 py-1 rounded-md text-xs font-black bg-amber-500/20 text-amber-400 border border-amber-500/40 tracking-wider">⏳ PENDING</span>`;
+                return `<span class="inline-flex items-center px-3 py-1 rounded-md text-sm font-black bg-amber-500/20 text-amber-400 border border-amber-500/40 tracking-wider">⏳ PENDING</span>`;
             } else {
-                return `<span class="inline-flex items-center px-3 py-1 rounded-md text-xs font-black bg-purple-500/20 text-purple-400 border border-purple-500/40 tracking-wider">🚀 PASSED</span>`;
+                return `<span class="inline-flex items-center px-3 py-1 rounded-md text-sm font-black bg-purple-500/20 text-purple-400 border border-purple-500/40 tracking-wider">🚀 PASSED</span>`;
             }
         }
 
@@ -187,10 +188,9 @@
             const headerContainer = document.getElementById('tableHeaders');
             headerContainer.innerHTML = headers.map(h => {
                 if (hiddenColumns.includes(h)) return ''; 
-                const pWidth = columnWidths[h] || '150px';
-                // Inline styles applied directly here to prevent compression
+                const pWidth = columnWidths[h] || '160px';
                 return `
-                    <th class="p-5 cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors text-base font-black tracking-wide" 
+                    <th class="p-5 cursor-pointer hover:bg-slate-800/80 hover:text-white transition-colors text-lg font-black tracking-wide text-left" 
                         style="width: ${pWidth}; min-width: ${pWidth};"
                         onclick="sortTable('${h}')">
                         <div class="flex items-center gap-1.5 whitespace-nowrap">
@@ -220,29 +220,28 @@
                     if (hiddenColumns.includes(h)) return; 
                     
                     let val = row[h] || '';
-                    const pWidth = columnWidths[h] || '150px';
-                    let cellClass = "p-5 align-middle whitespace-normal break-words";
+                    const pWidth = columnWidths[h] || '160px';
+                    let cellClass = "p-5 align-middle whitespace-normal break-words text-lg font-bold";
                     
                     if (h === 'Play_Status') {
                         cellClass += " text-center whitespace-nowrap";
                         val = calculatePlayStatus(row);
                     } else if (h === 'Ticker') {
-                        val = `<span class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-black bg-blue-500/10 text-blue-400 border border-blue-500/30 tracking-wider">${val}</span>`;
+                        val = `<span class="inline-flex items-center px-3 py-1.5 rounded-lg text-base font-black bg-blue-500/10 text-blue-400 border border-blue-500/30 tracking-wider">${val}</span>`;
                     } else if (h === 'Link') {
-                        val = `<a href="${val}" target="_blank" class="inline-flex items-center gap-1.5 text-sm text-teal-400 hover:text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 px-3.5 py-2 rounded-xl border border-teal-500/30 transition-all font-bold shadow-sm">View 🔗</a>`;
+                        val = `<a href="${val}" target="_blank" class="inline-flex items-center gap-1.5 text-base text-teal-400 hover:text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 px-3.5 py-2 rounded-xl border border-teal-500/30 transition-all font-black shadow-sm">View 🔗</a>`;
                     } else if (h === 'Scenario') {
-                        cellClass += " font-bold text-slate-100 text-base leading-relaxed";
+                        cellClass += " text-slate-100 leading-relaxed font-black text-lg";
                     } else if (h === 'Current_Price') {
-                        val = (val && !isNaN(parseFloat(val))) ? `<span class="text-emerald-400 font-mono font-black text-xl bg-emerald-500/5 px-2.5 py-1.5 rounded-lg border border-emerald-500/10">$${parseFloat(val).toFixed(2)}</span>` : `<span class="text-slate-600 font-mono font-bold">-</span>`;
+                        val = (val && !isNaN(parseFloat(val))) ? `<span class="text-emerald-400 font-mono font-black text-2xl bg-emerald-500/5 px-2.5 py-1.5 rounded-lg border border-emerald-500/10">$${parseFloat(val).toFixed(2)}</span>` : `<span class="text-slate-600 font-mono font-bold">-</span>`;
                     } else if (h === 'Entry' || h === 'Stop_Loss' || h === 'Targets') {
-                        cellClass += " font-mono text-sm text-slate-200 leading-relaxed font-bold";
+                        cellClass += " font-mono text-base text-slate-200 leading-relaxed font-bold";
                     } else if (h === 'Est_Probability' || h === 'R_R_Ratio') {
-                        cellClass += " font-mono text-base font-extrabold text-slate-400 text-center";
+                        cellClass += " font-mono text-lg font-extrabold text-slate-400 text-center";
                     } else if (h === 'Date') {
-                        cellClass += " text-slate-400 font-bold text-sm";
+                        cellClass += " text-slate-400 font-bold text-base";
                     }
                     
-                    // Fixed width styles applied directly to table data cells
                     rowHtml += `<td class="${cellClass}" style="width: ${pWidth}; min-width: ${pWidth};">${val}</td>`;
                 });
                 
