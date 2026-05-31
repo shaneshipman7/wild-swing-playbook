@@ -23,54 +23,13 @@
                 <h1 class="title-font text-4xl font-semibold tracking-tighter flex items-center gap-x-3">
                     📈 Wild Swing Trades <span class="text-emerald-400 text-2xl">LIVE</span>
                 </h1>
-                <p class="text-slate-400 mt-1">Master Playbook Viewer • Free Tier Mode (Auto-refreshes every 75s) • Powered by Polygon.io</p>
+                <p class="text-slate-400 mt-1">Auto-loaded from GitHub • Updated daily</p>
             </div>
             <div class="flex items-center gap-x-4">
-                <button id="refresh-btn" onclick="refreshData()" class="flex items-center gap-x-2 bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-2xl font-medium cursor-pointer transition-colors disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed">
+                <button onclick="loadLatestCSV()" class="flex items-center gap-x-2 bg-emerald-600 hover:bg-emerald-500 px-6 py-3 rounded-2xl font-medium cursor-pointer transition-colors">
                     <i class="fa-solid fa-arrows-rotate"></i>
-                    <span id="refresh-btn-text">Refresh Now</span>
+                    <span>Refresh Data</span>
                 </button>
-                <div class="text-xs bg-slate-900 px-4 py-2 rounded-2xl flex items-center gap-x-2">
-                    <div class="w-2 h-2 bg-emerald-400 rounded-full live-dot"></div>
-                    Free Tier Pricing • Auto Rolling Date
-                </div>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 bg-slate-900 p-4 rounded-3xl">
-            <div>
-                <label class="block text-xs uppercase tracking-widest text-slate-400 mb-1">Filter Ticker</label>
-                <select id="ticker-filter" onchange="renderTable()" class="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 focus:outline-none focus:border-emerald-400 text-slate-200">
-                    <option value="">All Tickers</option>
-                </select>
-            </div>
-            <div>
-                <label class="block text-xs uppercase tracking-widest text-slate-400 mb-1">Filter Scenario</label>
-                <select id="scenario-filter" onchange="renderTable()" class="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 focus:outline-none focus:border-emerald-400 text-slate-200">
-                    <option value="">All Scenarios</option>
-                    <option value="Pullback">Pullback Buy</option>
-                    <option value="Breakout">Breakout Continuation</option>
-                    <option value="Range">Range-Bound</option>
-                </select>
-            </div>
-            <div>
-                <label class="block text-xs uppercase tracking-widest text-slate-400 mb-1">Filter Play Status</label>
-                <select id="status-filter" onchange="renderTable()" class="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 focus:outline-none focus:border-emerald-400 text-slate-200">
-                    <option value="">All Statuses</option>
-                    <option value="ACTIONABLE">✅ Actionable Only</option>
-                    <option value="Monitor">⏳ Monitor Only</option>
-                    <option value="STOPPED">❌ Stopped Out Only</option>
-                </select>
-            </div>
-            <div>
-                <label class="block text-xs uppercase tracking-widest text-slate-400 mb-1">Sort Data By</label>
-                <select id="sort-by" onchange="renderTable()" class="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 focus:outline-none focus:border-emerald-400 text-slate-200">
-                    <option value="date-desc">Date (Newest First)</option>
-                    <option value="ticker-asc">Ticker (A to Z)</option>
-                    <option value="prob-desc">Est. Probability (Highest First)</option>
-                    <option value="rr-desc">R:R Ratio (Highest First)</option>
-                    <option value="status-priority">Status (Actionable First)</option>
-                </select>
             </div>
         </div>
 
@@ -82,10 +41,9 @@
                             <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">TICKER</th>
                             <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">SCENARIO</th>
                             <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">CURRENT PRICE</th>
-                            <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">ENTRY ZONE</th>
+                            <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">ENTRY</th>
                             <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">STOP LOSS</th>
                             <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">TARGETS</th>
-                            <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">STATUS</th>
                             <th class="text-left px-6 py-5 text-sm font-medium text-slate-500">R:R / PROB</th>
                         </tr>
                     </thead>
@@ -95,378 +53,74 @@
         </div>
 
         <div class="mt-6 text-xs text-slate-400 flex justify-between">
-            <div id="fetch-log">Initializing data framework...</div>
-            <div class="flex items-center gap-x-2"><span class="text-emerald-500">●</span> Green Row = Target Actionable Zone</div>
+            <div id="fetch-log">Loading latest data from GitHub...</div>
         </div>
     </div>
 
     <script>
-        // ==================== MASTER PLAYBOOK DATABASE CSV ====================
-        const rawCSV = `Date,Ticker,Post_Title,Scenario,Entry,Stop_Loss,Targets,R_R_Ratio,Est_Probability,Link
-2026-05-29,MFA,MFA Swing,Bullish Pullback BuyPRIMARY,$9.20 – $9.50(Retest of recent support),Below $8.80 – $9.00(6–8% risk),$10.50 (T1)$11.20–$11.50 (T2),1:2.0+,~60–70%,https://wildswingtrades.blogspot.com/2026/05/mfa-swing.html
-2026-05-29,MFA,MFA Swing,Breakout ContinuationAGGRESSIVE,Above $9.70 – $9.80 on volume,$9.20 – $9.30 zone,$10.80 (T1)$11.50+ (T2),1:2.2+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/mfa-swing.html
-2026-05-29,MFA,MFA Swing,Range-Bound Swing,$9.30 – $9.60,Below $8.90,$10.20 – $10.50,1:1.8,~58–68%,https://wildswingtrades.blogspot.com/2026/05/mfa-swing.html
-2026-05-28,IRTC,Rebound Hound - My Sniffers Found,Rebound Play,$110 – $115,See full post (~12% typical),Cons: $185(+62%) | Bull: $255(+124%),1:5+,High (70–75%),https://wildswingtrades.blogspot.com/2026/05/rebound-hound-my-sniffers-found.html
-2026-05-28,POOL,Rebound Hound - My Sniffers Found,Rebound Play,$180 – $185,See full post (~12% typical),Cons: $261(+41%) | Bull: $305(+65%),1:3.5 – 1:4,Med-High (60%),https://wildswingtrades.blogspot.com/2026/05/rebound-hound-my-sniffers-found.html
-2026-05-28,MDLN,Rebound Hound - My Sniffers Found,Rebound Play,$35 – $37,See full post (~12% typical),Cons: $52(+41%) | Bull: $62(+68%),1:3.5,Medium (55–65%),https://wildswingtrades.blogspot.com/2026/05/rebound-hound-my-sniffers-found.html
-2026-05-28,BB,BB BlackBerry,Bullish Pullback BuyPRIMARY,$8.00 – $8.50(Retest of today's breakout area),Below $7.40 – $7.60(8–12% risk),$10.00 (T1)$11.50–$12.00 (T2),1:2.0+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/bb-blackberry.html
-2026-05-28,BB,BB BlackBerry,Breakout ContinuationAGGRESSIVE,Above $9.10 – $9.30 on volume,$8.20 – $8.40 zone,$10.50 (T1)$12+ (T2),1:2.5+,~50–60%,https://wildswingtrades.blogspot.com/2026/05/bb-blackberry.html
-2026-05-28,BB,BB BlackBerry,Range-Bound Swing,$8.20 – $8.80,Below $7.60,$9.50 – $10.00,1:1.8,~48–58%,https://wildswingtrades.blogspot.com/2026/05/bb-blackberry.html
-2026-05-28,MU,MU,Bullish Pullback BuyPRIMARY,$880 – $905(Retest of recent breakout support),Below $850 – $860(5–7% risk),"$980 (T1)$1,050–$1,100 (T2)",1:2.0+,~60–70%,https://wildswingtrades.blogspot.com/2026/05/mu.html
-2026-05-28,MU,MU,Breakout ContinuationAGGRESSIVE,Above $940 – $950 on volume,$890 – $900 zone,"$1,000 (T1)$1,150+ (T2)",1:2.5+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/mu.html
-2026-05-28,MU,MU,Range-Bound Swing,$890 – $920,Below $860,$960 – $980,1:1.8,~50–60%,https://wildswingtrades.blogspot.com/2026/05/mu.html
-2026-05-28,PIII,PIII Booh Yeah,Bullish Pullback BuyPRIMARY,$14.00 – $15.00(Retest of recent breakout / support),Below $12.50 – $13.00(12–15% risk),$18 (T1)$22–$25 (T2),1:2.0+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/piii-booh-yeah.html
-2026-05-28,PIII,PIII Booh Yeah,Breakout ContinuationAGGRESSIVE,Above $16.50 – $17 on volume,$14.50 – $15 zone,$20 (T1)$25+ (T2),1:2.5+,~50–60%,https://wildswingtrades.blogspot.com/2026/05/piii-booh-yeah.html
-2026-05-28,PIII,PIII Booh Yeah,Range-Bound Swing,$14.50 – $16,Below $13,$18 – $19,1:1.8,~48–58%,https://wildswingtrades.blogspot.com/2026/05/piii-booh-yeah.html
-2026-05-28,PTGX,PTGX,Bullish Pullback BuyPRIMARY,$39.50 – $41.50(Near-term support zone),Below $36 – $37(8–12% risk),$50 (T1)$58–$62 (T2),1:2.0+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/ptgx.html
-2026-05-28,PTGX,PTGX,Breakout ContinuationAGGRESSIVE,Above $45 – $46 on volume,$40 – $41 zone,$52 (T1)$65+ (T2),1:2.5+,~50–60%,https://wildswingtrades.blogspot.com/2026/05/ptgx.html
-2026-05-28,PTGX,PTGX,Range-Bound Swing,$40 – $44,Below $37,$48 – $50,1:1.8,~48–58%,https://wildswingtrades.blogspot.com/2026/05/ptgx.html
-2026-05-28,AEP,AEP,Bullish Pullback BuyPRIMARY,$100 – $102.50(Near-term support zone),Below $96 – $97(5–7% risk),$108 (T1)$112–$115 (T2),1:2.0+,~65–75%,https://wildswingtrades.blogspot.com/2026/05/aep.html
-2026-05-28,AEP,AEP,Breakout ContinuationAGGRESSIVE,Above $106 – $107 on volume,$101 – $102 zone,$110 (T1)$115+ (T2),1:2.2+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/aep.html
-2026-05-28,AEP,AEP,Range-Bound Swing,$101 – $104,Below $97,$107 – $109,1:1.8,~60–70%,https://wildswingtrades.blogspot.com/2026/05/aep.html
-2026-05-28,ELF,ELF,Bullish Pullback BuyPRIMARY,$53 – $56(Retest of today's gap / support),Below $49 – $50(8–12% risk),$65 (T1)$72–$78 (T2),1:2.0+,~58–68%,https://wildswingtrades.blogspot.com/2026/05/elf.html
-2026-05-28,ELF,ELF,Breakout ContinuationAGGRESSIVE,Above $59 – $60 on volume,$54 – $55.50 zone,$66 (T1)$75+ (T2),1:2.5+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/elf.html
-2026-05-28,ELF,ELF,Range-Bound Swing,$54 – $58,Below $50,$63 – $66,1:1.8,~50–60%,https://wildswingtrades.blogspot.com/2026/05/elf.html
-2026-05-28,HEI,HEI,Bullish Pullback BuyPRIMARY,$320 – $330(Retest of recent breakout area),Below $305 – $310(6–8% risk),$360 (T1)$380–$400 (T2),1:2.0+,~60–70%,https://wildswingtrades.blogspot.com/2026/05/hei.html
-2026-05-28,HEI,HEI,Breakout ContinuationAGGRESSIVE,Above $345 – $350 on volume,$325 – $330 zone,$370 (T1)$400+ (T2),1:2.5+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/hei.html
-2026-05-28,HEI,HEI,Range-Bound Swing,$325 – $340,Below $310,$355 – $365,1:1.8,~50–60%,https://wildswingtrades.blogspot.com/2026/05/hei.html
-2026-05-28,TE,TE,Bullish Pullback BuyPRIMARY,$9.80 – $10.50(Near-term support after recent surge),Below $8.80 – $9.00(8–12% risk),$13 (T1)$15–$16 (T2),1:2.0+,~58–68%,https://wildswingtrades.blogspot.com/2026/05/te.html
-2026-05-28,TE,TE,Breakout ContinuationAGGRESSIVE,Above $11.50 – $12 on volume,$10.00 – $10.30 zone,$13.50 (T1)$16+ (T2),1:2.5+,~52–62%,https://wildswingtrades.blogspot.com/2026/05/te.html
-2026-05-28,TE,TE,Range-Bound Swing,$10.00 – $11.00,Below $9.00,$12.50 – $13.50,1:1.8,~50–60%,https://wildswingtrades.blogspot.com/2026/05/te.html
-2026-05-28,AMPX,AMPX,Bullish Pullback BuyPRIMARY,$15.80 – $16.80(Near-term support zone),Below $14.50 – $15.00(8–12% risk),$20 (T1)$23–$25 (T2),1:2.0+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/ampx.html
-2026-05-28,AMPX,AMPX,Breakout ContinuationAGGRESSIVE,Above $18.50 – $19 on volume,$16.50 – $17 zone,$22 (T1)$26+ (T2),1:2.5+,~52–62%,https://wildswingtrades.blogspot.com/2026/05/ampx.html
-2026-05-28,AMPX,AMPX,Range-Bound Swing,$16.50 – $18,Below $15,$20 – $21,1:1.8,~48–58%,https://wildswingtrades.blogspot.com/2026/05/ampx.html
-2026-05-28,SMCI,SMCI Super Micro Computer,Bullish Pullback BuyPRIMARY,$35.50 – $37.50(Near-term support zone),Below $32 – $33(8–12% risk),$45 (T1)$52–$55 (T2),1:2.0+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/smci-super-micro-computer.html
-2026-05-28,SMCI,SMCI Super Micro Computer,Breakout ContinuationAGGRESSIVE,Above $40 – $42 on strong volume,$36 – $37 zone,$48 (T1)$58+ (T2),1:2.5+,~50–60%,https://wildswingtrades.blogspot.com/2026/05/smci-super-micro-computer.html
-2026-05-28,SMCI,SMCI Super Micro Computer,Range-Bound Swing,$36 – $39,Below $33,$44 – $46,1:1.8,~48–58%,https://wildswingtrades.blogspot.com/2026/05/smci-super-micro-computer.html
-2026-05-28,MULTI,"We In The HOOD, Robin.",Bullish Pullback BuyPRIMARY,$72 – $74.50(Near today's low / support),Below $68 – $70(6–8% risk),$85 (T1)$95–$100 (T2),1:2.0+,~58–68%,https://wildswingtrades.blogspot.com/2026/05/we-in-hood-robin.html
-2026-05-28,MULTI,"We In The HOOD, Robin.",Breakout ContinuationAGGRESSIVE,Above $77 – $78 on volume,$72 – $73 zone,$85 (T1)$95+ (T2),1:2.5+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/we-in-hood-robin.html
-2026-05-28,MULTI,"We In The HOOD, Robin.",Range-Bound Swing,$73 – $76,Below $70,$82 – $85,1:1.8,~50–60%,https://wildswingtrades.blogspot.com/2026/05/we-in-hood-robin.html
-2026-05-28,MULTI,I've Got An APP For That,Bullish Pullback BuyPRIMARY,$520 – $545(Retest of today's breakout area),Below $490 – $500(8–12% risk),$620 (T1)$680–$720 (T2),1:2.0+,~60–70%,https://wildswingtrades.blogspot.com/2026/05/ive-got-app-for-that.html
-2026-05-28,MULTI,I've Got An APP For That,Breakout ContinuationAGGRESSIVE,Above $590 – $600 on volume,$545 – $560 zone,$650 (T1)$720+ (T2),1:2.5+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/ive-got-app-for-that.html
-2026-05-28,MULTI,I've Got An APP For That,Range-Bound Swing,$530 – $570,Below $500,$620 – $650,1:2.0,~50–60%,https://wildswingtrades.blogspot.com/2026/05/ive-got-app-for-that.html
-2026-05-28,IONQ,IONQ,Bullish Pullback BuyPRIMARY,$58 – $62(Near-term support zone),Below $52–$55(8–12% risk),$75 (T1)$85–$90 (T2),1:2.0+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/ionq.html
-2026-05-28,IONQ,IONQ,Breakout ContinuationAGGRESSIVE,Above $67–$70 on volume,$60–$62 zone,$78–$82 (T1)$95+ (T2),1:2.5+,~50–60%,https://wildswingtrades.blogspot.com/2026/05/ionq.html
-2026-05-28,IONQ,IONQ,Range-Bound Swing,$60 – $65,Below $55,$72–$75,1:1.8,~45–55%,https://wildswingtrades.blogspot.com/2026/05/ionq.html
-2026-05-28,MULTI,From Kitchen Tables to Trading Profits: The WSM Swing Setup,Bullish Pullback BuyPRIMARY STRATEGY,$192.04 – $204.30Scale-in zone,Below $159.35(-22% from entry structural invalidation),$241.07(T1: +18%)$286.02(T2: +40%),1:0.8,~60–70%,https://wildswingtrades.blogspot.com/2026/05/from-kitchen-tables-to-trading-profits.html
-2026-05-28,MULTI,From Kitchen Tables to Trading Profits: The WSM Swing Setup,Breakout ContinuationMOMENTUM CONFIRMED,Above $210 – $215Daily close confirmation,$190 – $195 zoneBelow breakout candle low,$245.00(T1)$280.00+(T2),1:2.0+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/from-kitchen-tables-to-trading-profits.html
-2026-05-28,MULTI,Going Stag STGW,Bullish Pullback BuyPRIMARY STRATEGY,$6.55 – $6.97Scale-in demand zone,Below $5.44(-22% validation limit),$8.22(T1: +18%)$9.76(T2: +40%),1:0.8,~58–68%,https://wildswingtrades.blogspot.com/2026/05/going-stag-stgw.html
-2026-05-28,MULTI,Going Stag STGW,Breakout ContinuationMOMENTUM CONTEXT,Above $7.20 – $7.40Clearance of local peak,$6.40 – $6.55 zoneBelow breakout baseline,$8.50(T1)$10.00+(T2),1:2.0+,~52–62%,https://wildswingtrades.blogspot.com/2026/05/going-stag-stgw.html
-2026-05-28,MULTI,All Hands On DECK,Bullish Pullback BuyPRIMARY STRATEGY,$107.43 – $114.29Structural loading zone,Below $89.15(-22% structural invalidation),$134.86(T1: +18%)$160.01(T2: +40%),1:0.8,~60–70%,https://wildswingtrades.blogspot.com/2026/05/all-hands-on-deck.html
-2026-05-28,MULTI,All Hands On DECK,Breakout ContinuationMOMENTUM CONFIRMED,Above $118 – $120Daily candle confirmation,$105 – $107 zoneBelow breakout origin pivot,$135.00 – $145.00(T1)$160.00+(T2),1:2.0+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/all-hands-on-deck.html
-2026-05-28,LLY,LLY - Breaking It Down,Bullish Pullback BuyPRIMARY STRATEGY,$1,021.70 – $1,055.00(Pullback to structural support),Below $847.79(-22% scanner default line),"$1,282.55(T1: +18%)$1,521.67(T2: +40%)",1:0.8,~60–70%,https://wildswingtrades.blogspot.com/2026/05/lly-breaking-it-down.html
-2026-05-28,LLY,LLY - Breaking It Down,Breakout ContinuationAGGRESSIVE MOMENTUM,Above $1,100.00(Confirmed on high relative volume),$1,030.00 – $1,050.00(Below local channel support),"$1,180.00 – $1,220.00(T1)$1,300.00+(T2)",1:2.0+,~55–65%,https://wildswingtrades.blogspot.com/2026/05/lly-breaking-it-down.html
-2026-05-28,LLY,LLY - Breaking It Down,Range-Bound SwingTACTICAL MEAN REVERSION,Current Levels ~$1,070 – $1,087(With clear momentum confirmation),Below $1,021.00(Inversion of immediate floor),"$1,134.00 – $1,180.00",1:1.5 to 1:2.0,~50–60%,https://wildswingtrades.blogspot.com/2026/05/lly-breaking-it-down.html
-2026-05-28,LLY,LLY - Breaking It Down,Bearish ReversalCOUNTER-TREND / AVOID,Short entry below $1,020.00(On confirmed breakdown of floor),Above $1,100.00(Above localized resistance peak),$980.00then$930.00,N/A,~30–40%,https://wildswingtrades.blogspot.com/2026/05/lly-breaking-it-down.html
-2026-05-27,GE,GE Aerospace - Are We Set To Fly?,Bullish BreakoutPRIMARY,Above $318–$320(Daily close + high volume),Below $305–$308(3–5% risk parameters),$340(T1)$355(T2),1:2.0 to 1:3.0,~55–65%,https://wildswingtrades.blogspot.com/2026/05/ge-aerospace-are-we-set-to-fly.html
-2026-05-27,GE,GE Aerospace - Are We Set To Fly?,Pullback BuyAGGRESSIVE,$300–$305 support zone,Below $295(4–6% risk parameters),$325–$340,1:2.0 to 1:2.5,~48–55%,https://wildswingtrades.blogspot.com/2026/05/ge-aerospace-are-we-set-to-fly.html
-2026-05-27,GE,GE Aerospace - Are We Set To Fly?,Range Continuation,Current (~$314–$317)(Requires intraday momentum),Below $305,$330–$340,1:1.8 to 1:2.2,~45–55%,https://wildswingtrades.blogspot.com/2026/05/ge-aerospace-are-we-set-to-fly.html
-2026-05-27,GE,GE Aerospace - Are We Set To Fly?,Bearish BreakdownAVOID LONGS,Short entry below $300,Above $325,"$295 intermediate,then macro $280",N/A,~35–40%,https://wildswingtrades.blogspot.com/2026/05/ge-aerospace-are-we-set-to-fly.html
-2026-05-26,JOBY,JOBY Let's Fly,🚀 Aggressive Breakout,$11.00–$11.10(break & close above),Break of $10.93–$11.00 level on volume; momentum continuation.,$10.45,$13.00,+7–9%,https://wildswingtrades.blogspot.com/2026/05/joby-lets-fly.html
-2026-05-26,JOBY,JOBY Let's Fly,📉 Pullback Buy,$10.50–$10.65(bounce off support),Hold at key support/MA zone with bullish reversal candle.,$10.10–$10.20,$12.50–$13.00,+8–11%,https://wildswingtrades.blogspot.com/2026/05/joby-lets-fly.html
-2026-05-26,JOBY,JOBY Let's Fly,🕳️ Deep Pullback,$9.90–$10.10,Deeper retrace to stronger support (pivot/volume zone).,$9.50,$13.00,+14–16%,https://wildswingtrades.blogspot.com/2026/05/joby-lets-fly.html
-2026-05-26,JOBY,JOBY Let's Fly,🔄 Range Continuation,$10.75–$10.85(consolidation),Hold above 20/50-day MAs in uptrend.,$10.35,$12.50,+7–8%,https://wildswingtrades.blogspot.com/2026/05/joby-lets-fly.html`;
+        const GITHUB_CSV_URL = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_";
 
-        let allPlays = [];
-        let pricesCache = {};
-        let lastFetchTime = 0;
-        let isDropdownInitialized = false;
+        async function loadLatestCSV() {
+            const log = document.getElementById('fetch-log');
+            log.textContent = "Fetching latest playbook...";
 
-        function parseCSV(csv) {
-            const lines = csv.trim().split('\n');
-            const headers = lines[0].split(',');
-            return lines.slice(1).map(line => {
-                const values = [];
-                let current = '';
-                let inQuotes = false;
-                for (let char of line) {
-                    if (char === '"' && !inQuotes) { inQuotes = true; continue; }
-                    if (char === '"' && inQuotes) { inQuotes = false; continue; }
-                    if (char === ',' && !inQuotes) {
-                        values.push(current.trim());
-                        current = '';
-                    } else {
-                        current += char;
-                    }
+            const today = new Date().toISOString().slice(0,10);
+            let url = GITHUB_CSV_URL + today + ".csv";
+
+            try {
+                const res = await fetch(url);
+                if (!res.ok) {
+                    // Try yesterday if today doesn't exist yet
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    url = GITHUB_CSV_URL + yesterday.toISOString().slice(0,10) + ".csv";
+                    const res2 = await fetch(url);
+                    if (!res2.ok) throw new Error("No data found");
                 }
-                values.push(current.trim());
-                const obj = {};
-                headers.forEach((header, i) => obj[header] = values[i] || '');
-                return obj;
-            });
-        }
 
-        const multiMap = {
-            "We In The HOOD, Robin.": "HOOD",
-            "I've Got An APP For That": "APP",
-            "From Kitchen Tables to Trading Profits: The WSM Swing Setup": "WSM",
-            "Going Stag STGW": "STGW",
-            "All Hands On DECK": "DECK",
-            "LLY - Breaking It Down": "LLY"
-        };
+                const csvText = await res.text();
+                const rows = csvText.trim().split('\n');
+                const headers = rows[0].split(',');
 
-        async function fetchLivePrices() {
-            // Put your verified API Key here:
-            const POLYGON_API_KEY = "D8npLY8EHMvBq3iLEF2xpslUDcPEW5to"; 
-            
-            let daysAgo = 0;
-            let data = null;
-            const results = {};
-            const logElement = document.getElementById('fetch-log');
+                const data = rows.slice(1).map(row => {
+                    const values = row.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                    const obj = {};
+                    headers.forEach((h, i) => obj[h] = values[i] ? values[i].replace(/^"|"$/g, '') : '');
+                    return obj;
+                }).filter(row => row.Ticker);
 
-            function formatDate(date) {
-                const d = new Date(date);
-                let month = '' + (d.getMonth() + 1);
-                let day = '' + d.getDate();
-                const year = d.getFullYear();
-                if (month.length < 2) month = '0' + month;
-                if (day.length < 2) day = '0' + day;
-                return [year, month, day].join('-');
+                renderTable(data);
+                log.textContent = `Loaded ${data.length} setups • Last updated: ${today}`;
+
+            } catch (e) {
+                log.textContent = "⚠️ Could not load latest data. Try again later.";
+                console.error(e);
             }
-
-            while (daysAgo < 7) {
-                const targetDate = new Date();
-                targetDate.setDate(targetDate.getDate() - daysAgo);
-                const dateStr = formatDate(targetDate);
-                
-                const url = `https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${dateStr}?adjusted=true&apiKey=${POLYGON_API_KEY}`;
-                
-                try {
-                    logElement.textContent = `Attempting framework connection for date: ${dateStr}...`;
-                    const res = await fetch(url);
-                    
-                    if (res.status === 429) {
-                        logElement.textContent = "Rate limited. Cooling down 12s...";
-                        await new Promise(resolve => setTimeout(resolve, 12000));
-                        continue; 
-                    }
-                    
-                    if (!res.ok) {
-                        daysAgo++;
-                        continue;
-                    }
-                    
-                    const json = await res.json();
-                    if (json.results && json.results.length > 0) {
-                        data = json;
-                        logElement.textContent = `Full data mapped successfully via Polygon aggregates for [${dateStr}].`;
-                        break;
-                    }
-                } catch (e) {
-                    console.error(`Fetch routine exception on ${dateStr}:`, e);
-                }
-                daysAgo++;
-            }
-
-            if (data && data.results) {
-                data.results.forEach(item => {
-                    if (item && item.T) {
-                        results[item.T] = Number(item.c).toFixed(2);
-                        pricesCache[item.T] = results[item.T];
-                    }
-                });
-            } else {
-                logElement.textContent = "Error: Key unauthorized or market data frame window expired.";
-            }
-            
-            return results;
         }
 
-        function parsePriceRange(str) {
-            if (!str) return {low: null, high: null, text: str || ''};
-            const matches = str.match(/\$?([\d,]+\.?\d*)/g);
-            if (!matches) return {low: null, high: null, text: str};
-            const nums = matches.map(n => parseFloat(n.replace(/[^0-9.]/g, '')));
-            return { low: Math.min(...nums), high: Math.max(...nums), text: str };
-        }
-
-        function determineStatus(play, currentPrice) {
-            const entry = parsePriceRange(play.Entry);
-            const stop = parsePriceRange(play.Stop_Loss);
-            const scenarioLower = play.Scenario.toLowerCase();
-            let status = 'Monitor';
-            let color = 'text-amber-600';
-            let actionable = false;
-            const price = parseFloat(currentPrice);
-            if (isNaN(price)) return {status: '⏳ Price N/A', color: 'text-slate-400', actionable: false};
-
-            if (scenarioLower.includes('pullback') || scenarioLower.includes('primary')) {
-                if (entry.low && price >= entry.low * 0.98 && price <= (entry.high || entry.low) * 1.05) {
-                    status = '✅ ACTIONABLE PULLBACK';
-                    actionable = true;
-                    color = 'text-emerald-600 font-semibold';
-                }
-            } else if (scenarioLower.includes('breakout') || scenarioLower.includes('continuation')) {
-                if (entry.low && price > entry.low) {
-                    status = '🚀 BREAKOUT TRIGGERED';
-                    actionable = true;
-                    color = 'text-emerald-600 font-semibold';
-                } else {
-                    status = 'Waiting for breakout';
-                }
-            } else if (scenarioLower.includes('range')) {
-                if (entry.low && price >= entry.low && price <= (entry.high || entry.low * 1.1)) {
-                    status = '✅ IN RANGE';
-                    actionable = true;
-                    color = 'text-emerald-600 font-semibold';
-                }
-            }
-
-            if (stop.low && price < stop.low) {
-                status = '❌ STOPPED OUT';
-                actionable = false;
-                color = 'text-red-600';
-            }
-            return {status, color, actionable};
-        }
-
-        // Helper to extract probability as a clean number for sorting
-        function parseProbability(str) {
-            const match = str.match(/(\d+)/);
-            return match ? parseInt(match[0], 10) : 0;
-        }
-
-        // Helper to extract risk/reward ratio as a clean number for sorting
-        function parseRR(str) {
-            const match = str.match(/([\d.]+)/);
-            return match ? parseFloat(match[0]) : 0;
-        }
-
-        async function loadData() {
-            allPlays = parseCSV(rawCSV);
-            
-            allPlays.forEach(play => {
-                const cleanTitle = play.Post_Title.replace(/^"|"$/g, '').trim();
-                if (play.Ticker === 'MULTI' && multiMap[cleanTitle]) {
-                    play.Ticker = multiMap[cleanTitle];
-                }
-            });
-
-            const livePrices = await fetchLivePrices();
-            
-            // Attach current price and full status objects directly to the play data structural models
-            allPlays.forEach(play => {
-                play.CurrentPrice = livePrices[play.Ticker] || pricesCache[play.Ticker] || '—';
-                play.StatusInfo = determineStatus(play, play.CurrentPrice);
-            });
-
-            // Populate the interactive Ticker Dropdown element safely once
-            if (!isDropdownInitialized) {
-                const tickers = [...new Set(allPlays.map(p => p.Ticker))].sort();
-                const select = document.getElementById('ticker-filter');
-                select.innerHTML = `<option value="">All Tickers (${tickers.length})</option>`;
-                tickers.forEach(t => {
-                    const opt = document.createElement('option');
-                    opt.value = t; opt.textContent = t;
-                    select.appendChild(opt);
-                });
-                isDropdownInitialized = true;
-            }
-
-            renderTable();
-        }
-
-        function renderTable() {
-            // Read active dropdown filters
-            const tickerVal = document.getElementById('ticker-filter').value;
-            const scenarioVal = document.getElementById('scenario-filter').value.toLowerCase();
-            const statusVal = document.getElementById('status-filter').value;
-            const sortBy = document.getElementById('sort-by').value;
-
-            // Process filters
-            let filteredPlays = allPlays.filter(play => {
-                const matchTicker = !tickerVal || play.Ticker === tickerVal;
-                const matchScenario = !scenarioVal || play.Scenario.toLowerCase().includes(scenarioVal);
-                
-                let matchStatus = true;
-                if (statusVal === 'ACTIONABLE') matchStatus = play.StatusInfo.actionable;
-                else if (statusVal === 'Monitor') matchStatus = play.StatusInfo.status.includes('Monitor') || play.StatusInfo.status.includes('Waiting');
-                else if (statusVal === 'STOPPED') matchStatus = play.StatusInfo.status.includes('STOPPED');
-
-                return matchTicker && matchScenario && matchStatus;
-            });
-
-            // Process structural sorting
-filteredPlays.sort((a, b) => {
-    if (sortBy === 'ticker-asc') {
-        return a.Ticker.localeCompare(b.Ticker);
-    } else if (sortBy === 'prob-desc') {
-        return parseProbability(b.Est_Probability) - parseProbability(a.Est_Probability);
-    } else if (sortBy === 'rr-desc') {
-        return parseRR(b.R_R_Ratio) - parseRR(a.R_R_Ratio);
-    } else if (sortBy === 'status-priority') {
-        // Assign a numerical weight to each status type
-        const getStatusWeight = (play) => {
-            if (play.StatusInfo.actionable) return 1; // Top priority
-            if (play.StatusInfo.status.includes('STOPPED')) return 3; // Bottom priority
-            return 2; // Monitor / Waiting
-        };
-        return getStatusWeight(a) - getStatusWeight(b);
-    } else { // default: date-desc
-        return new Date(b.Date) - new Date(a.Date);
-    }
-});
-
-            // Rebuild interface rows directly inside document layout framework
+        function renderTable(data) {
             const tbody = document.getElementById('table-body');
             tbody.innerHTML = '';
-            
-            if (filteredPlays.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-8 text-slate-400 font-medium">No setups matching the current filters.</td></tr>`;
-                return;
-            }
 
-            filteredPlays.forEach(play => {
-                const row = document.createElement('tr');
-                if (play.StatusInfo.actionable) row.classList.add('actionable');
-
-                row.innerHTML = `
-                    <td class="px-6 py-5 font-mono font-semibold">${play.Ticker}</td>
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-6 py-5 font-mono font-semibold">${row.Ticker || ''}</td>
                     <td class="px-6 py-5">
-                        <div class="text-xs text-slate-500">${play.Post_Title}</div>
-                        <div class="font-medium">${play.Scenario}</div>
+                        <div class="font-medium">${row.Scenario || ''}</div>
                     </td>
-                    <td class="px-6 py-5 font-semibold text-lg">${play.CurrentPrice}</td>
-                    <td class="px-6 py-5 text-sm">${parsePriceRange(play.Entry).text}</td>
-                    <td class="px-6 py-5 text-sm">${parsePriceRange(play.Stop_Loss).text}</td>
-                    <td class="px-6 py-5 text-sm">${play.Targets}</td>
-                    <td class="px-6 py-5 ${play.StatusInfo.color}">${play.StatusInfo.status}</td>
-                    <td class="px-6 py-5 text-xs">${play.R_R_Ratio}<br><span class="text-emerald-600">${play.Est_Probability}</span></td>
+                    <td class="px-6 py-5 font-semibold">${row.Current_Price || '—'}</td>
+                    <td class="px-6 py-5 text-sm">${row.Entry || ''}</td>
+                    <td class="px-6 py-5 text-sm">${row.Stop_Loss || ''}</td>
+                    <td class="px-6 py-5 text-sm">${row.Targets || ''}</td>
+                    <td class="px-6 py-5 text-xs">${row.R_R_Ratio || ''}<br><span class="text-emerald-600">${row.Est_Probability || ''}</span></td>
                 `;
-                tbody.appendChild(row);
+                tbody.appendChild(tr);
             });
         }
 
-        function refreshData() {
-            const now = Date.now();
-            const btn = document.getElementById('refresh-btn');
-            const btnText = document.getElementById('refresh-btn-text');
-
-            if (now - lastFetchTime < 15000) {
-                alert("Free tier cooldown: Please wait a few seconds before forcing another update.");
-                return;
-            }
-
-            lastFetchTime = now;
-            btnText.innerHTML = '🔄 Fetching...';
-            btn.disabled = true;
-
-            loadData().then(() => { 
-                btnText.textContent = 'Refresh Now'; 
-                btn.disabled = false;
-            });
-        }
-
-        window.onload = () => {
-            lastFetchTime = Date.now();
-            loadData();
-            setInterval(() => { 
-                if (document.visibilityState === 'visible') {
-                    lastFetchTime = Date.now();
-                    loadData();
-                } 
-            }, 75000);
-        };
+        // Auto load on page open
+        window.onload = loadLatestCSV;
     </script>
 </body>
 </html>
