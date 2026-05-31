@@ -26,20 +26,21 @@
         }
 
         .table-cell {
-            font-size: 1.05rem;
-            line-height: 1.4;
+            font-size: 1.15rem;        /* Larger */
+            line-height: 1.45;
+            font-weight: 600;
         }
 
         .header-cell {
-            font-size: 0.85rem;
-            line-height: 1.25;
+            font-size: 0.95rem;        /* Larger headers */
+            line-height: 1.3;
             white-space: nowrap;
+            font-weight: 700;
         }
 
         .scenario-cell {
             white-space: normal !important;
-            line-height: 1.35;
-            word-break: break-word;
+            line-height: 1.4;
         }
     </style>
 </head>
@@ -91,7 +92,7 @@
         const columnWidths = {
             'Ticker': '115px',
             'Play_Status': '165px',
-            'Scenario': '460px',        // Tightened
+            'Scenario': '460px',
             'Entry': '310px',
             'Stop_Loss': '270px',
             'Targets': '350px',
@@ -151,7 +152,6 @@
                     globalHeaders.splice(2, 0, 'Play_Status');
                 }
 
-                // Force Date to be last column
                 globalHeaders = globalHeaders.filter(h => h !== 'Date');
                 globalHeaders.push('Date');
 
