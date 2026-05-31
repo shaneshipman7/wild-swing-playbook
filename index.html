@@ -91,10 +91,9 @@
 
         function getNumericRR(val) {
             if (!val) return 0;
-            // Extract the number after the colon (e.g. "1:2.5+" → 2.5)
-            const parts = String(val).split(':');
-            const numStr = parts.length > 1 ? parts[1] : parts[0];
-            const match = numStr.match(/(\d+\.?\d*)/);
+            console.log("Sorting R:R:", val); // Debug
+            let clean = String(val).replace('+', '').trim();
+            const match = clean.match(/(\d+\.?\d*)/);
             return match ? parseFloat(match[1]) : 0;
         }
 
@@ -241,7 +240,7 @@
                     } else if (h === 'Est_Probability') {
                         val = val ? `<span class="font-mono">${val}</span>` : '-';
                     } else if (h === 'R_R_Ratio') {
-                        val = cleanText(val);   // Keep the + for display
+                        val = cleanText(val);
                     } else if (h === 'Pct_Return') {
                         const pct = getPctReturn(row);
                         val = pct ? `<span class="font-mono text-emerald-400 font-bold">+${pct}%</span>` : '-';
@@ -257,6 +256,8 @@
             sortDirection[key] = sortDirection[key] === 'asc' ? 'desc' : 'asc';
             const asc = sortDirection[key] === 'asc';
 
+            console.log("Sorting by:", key); // Debug
+
             currentData.sort((a, b) => {
                 let va, vb;
 
@@ -269,6 +270,7 @@
                 } else if (key === 'R_R_Ratio') {
                     va = getNumericRR(a[key]);
                     vb = getNumericRR(b[key]);
+                    console.log("R:R values:", a[key], va, b[key], vb); // Debug
                 } else if (key === 'Play_Status') {
                     va = getPlayStatusValue(a);
                     vb = getPlayStatusValue(b);
