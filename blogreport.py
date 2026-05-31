@@ -113,7 +113,7 @@ def fetch_current_prices(tickers):
             hist = stock.history(period="2d")
             if not hist.empty:
                 prices[ticker] = round(hist['Close'].iloc[-1], 2)
-            time.sleep(0.6)  # Be respectful to Yahoo
+            time.sleep(0.6)
         except:
             prices[ticker] = None
     return prices
@@ -166,5 +166,4 @@ if __name__ == "__main__":
         print(f"\n✅ Success!")
         print(f"   📊 CSV Database → {csv_filename} ({len(df)} rows)")
         print(f"   📋 TradingView file → {tv_filename} ({len(unique_tickers)} tickers)")
-        print(f"   📈 Prices updated for {sum(1 for v in prices.values() if v is not None)} tickers")
         print(f"   📈 Prices updated for {sum(1 for v in prices.values() if v is not None)} tickers")
