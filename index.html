@@ -62,8 +62,18 @@
         };
 
         function formatHeaderLabel(h) {
-            const map = { 'R_R_Ratio': 'R:R RATIO', 'Est_Probability': 'EST. PROB.', 'Play_Status': 'STATUS' };
+            const map = { 
+                'R_R_Ratio': 'R:R RATIO', 
+                'Est_Probability': 'EST. PROB.', 
+                'Play_Status': 'STATUS' 
+            };
             return map[h] || h.replace(/_/g, ' ').toUpperCase();
+        }
+
+        function getNumericProbability(val) {
+            if (!val) return 0;
+            const num = parseFloat(String(val).replace('%', '').trim());
+            return isNaN(num) ? 0 : num;
         }
 
         function getPlayStatusValue(row) {
@@ -98,11 +108,7 @@
                 const yesterday = new Date(Date.now() - 864e5).toISOString().slice(0,10);
                 const dayBefore = new Date(Date.now() - 2*864e5).toISOString().slice(0,10);
 
-                const urls = [
-                    baseUrl + today + ".csv",
-                    baseUrl + yesterday + ".csv",
-                    baseUrl + dayBefore + ".csv"
-                ];
+                const urls = [baseUrl + today + ".csv", baseUrl + yesterday + ".csv", baseUrl + dayBefore + ".csv"];
 
                 let text = null;
                 let loadedUrl = "";
@@ -134,7 +140,7 @@
 
                 renderHeaders();
                 renderTable(currentData);
-                console.log(`✅ Loaded ${currentData.length} rows from ${loadedUrl}`);
+                console.log(`✅ Loaded ${currentData.length} rows`);
             } catch(e) { console.error(e); }
         }
 
@@ -174,6 +180,8 @@
                         val = val.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/Buy([A-Z])/g, 'Buy $1');
                     } else if (h === 'Current_Price') {
                         val = val ? `<span class="font-mono text-emerald-400">$${parseFloat(val).toFixed(2)}</span>` : '-';
+                    } else if (h === 'Est_Probability') {
+                        val = val ? `<span class="font-mono">${val}</span>` : '-';
                     }
                     html += `<div class="${cls}" style="width: ${w}; flex-shrink: 0;">${val}</div>`;
                 });
@@ -185,12 +193,33 @@
         function sortTable(key) {
             sortDirection[key] = sortDirection[key] === 'asc' ? 'desc' : 'asc';
             const asc = sortDirection[key] === 'asc';
+
             currentData.sort((a, b) => {
-                let va = key === 'Play_Status' ? getPlayStatusValue(a) : (a[key] || '');
-                let vb = key === 'Play_Status' ? getPlayStatusValue(b) : (b[key] || '');
-                if (!isNaN(parseFloat(va)) && !isNaN(parseFloat(vb))) return asc ? parseFloat(va) - parseFloat(vb) : parseFloat(vb) - parseFloat(va);
+                let va = a[key] || '';
+                let vb = b[key] || '';
+
+                // Special handling for Est_Probability
+                if (key === 'Est_Probability') {
+                    va = getNumericProbability(va);
+                    vb = getNumericProbability(vb);
+                    return asc ? va - vb : vb - va;
+                }
+
+                // Special handling for Play_Status
+                if (key === 'Play_Status') {
+                    va = getPlayStatusValue(a);
+                    vb = getPlayStatusValue(b);
+                }
+
+                // Numeric sorting
+                if (!isNaN(parseFloat(va)) && !isNaN(parseFloat(vb))) {
+                    return asc ? parseFloat(va) - parseFloat(vb) : parseFloat(vb) - parseFloat(va);
+                }
+
+                // Text sorting
                 return asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
             });
+
             renderTable(currentData);
         }
 
