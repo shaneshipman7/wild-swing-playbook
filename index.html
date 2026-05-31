@@ -40,7 +40,7 @@
             <div class="text-sm text-slate-400">Click headers to sort • Scroll horizontally</div>
         </div>
         <div class="flex-1 table-wrapper custom-scroll border border-slate-800 bg-slate-900/70 backdrop-blur-xl rounded-2xl overflow-auto">
-            <div class="min-w-[2750px]">
+            <div class="min-w-[2950px]">
                 <div id="tableHeaders" class="flex sticky top-0 bg-slate-900 border-b border-slate-700 z-20"></div>
                 <div id="tableBody" class="flex flex-col text-slate-200"></div>
             </div>
@@ -57,14 +57,16 @@
         const columnWidths = {
             'Ticker': '115px', 'Play_Status': '165px', 'Scenario': '520px',
             'Entry': '310px', 'Stop_Loss': '270px', 'Targets': '350px',
-            'R_R_Ratio': '145px', 'Est_Probability': '155px', 'Link': '125px',
+            'R_R_Ratio': '145px', 'Est_Probability': '155px', 
+            'Pct_Return': '160px', 'Link': '125px',
             'Current_Price': '165px', 'Date': '135px'
         };
 
         function formatHeaderLabel(h) {
             const map = { 
                 'R_R_Ratio': 'R:R RATIO', 
-                'Est_Probability': 'EST. PROB.', 
+                'Est_Probability': 'EST. PROB.',
+                'Pct_Return': '% RETURN',
                 'Play_Status': 'STATUS' 
             };
             return map[h] || h.replace(/_/g, ' ').toUpperCase();
@@ -79,6 +81,21 @@
             if (!val) return 0;
             const match = String(val).match(/(\d+\.?\d*)/);
             return match ? parseFloat(match[1]) : 0;
+        }
+
+        function getPctReturn(row) {
+            const entryStr = String(row.Entry || '');
+            const targetsStr = String(row.Targets || '');
+            const entryNums = entryStr.match(/\d+(\.\d+)?/g) || [];
+            const targetNums = targetsStr.match(/\d+(\.\d+)?/g) || [];
+            
+            if (!entryNums.length || !targetNums.length) return 0;
+            
+            const entryPrice = parseFloat(entryNums[0]);
+            const bestTarget = Math.max(...targetNums.map(Number));
+            
+            if (entryPrice === 0) return 0;
+            return Math.round(((bestTarget - entryPrice) / entryPrice) * 100);
         }
 
         function getPlayStatusValue(row) {
@@ -187,6 +204,9 @@
                         val = val ? `<span class="font-mono text-emerald-400">$${parseFloat(val).toFixed(2)}</span>` : '-';
                     } else if (h === 'Est_Probability') {
                         val = val ? `<span class="font-mono">${val}</span>` : '-';
+                    } else if (h === 'Pct_Return') {
+                        const pct = getPctReturn(row);
+                        val = pct ? `<span class="font-mono text-emerald-400">+${pct}%</span>` : '-';
                     }
                     html += `<div class="${cls}" style="width: ${w}; flex-shrink: 0;">${val}</div>`;
                 });
@@ -203,32 +223,24 @@
                 let va = a[key] || '';
                 let vb = b[key] || '';
 
-                // Probability sorting
                 if (key === 'Est_Probability') {
                     va = getNumericProbability(va);
                     vb = getNumericProbability(vb);
-                    return asc ? va - vb : vb - va;
-                }
-
-                // R:R Ratio sorting (percentage return potential)
-                if (key === 'R_R_Ratio') {
+                } else if (key === 'R_R_Ratio') {
                     va = getNumericRR(va);
                     vb = getNumericRR(vb);
-                    return asc ? va - vb : vb - va;
-                }
-
-                // Play Status sorting
-                if (key === 'Play_Status') {
+                } else if (key === 'Pct_Return') {
+                    va = getPctReturn(a);
+                    vb = getPctReturn(b);
+                } else if (key === 'Play_Status') {
                     va = getPlayStatusValue(a);
                     vb = getPlayStatusValue(b);
                 }
 
-                // Numeric fallback
                 if (!isNaN(parseFloat(va)) && !isNaN(parseFloat(vb))) {
                     return asc ? parseFloat(va) - parseFloat(vb) : parseFloat(vb) - parseFloat(va);
                 }
 
-                // Text fallback
                 return asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
             });
 
