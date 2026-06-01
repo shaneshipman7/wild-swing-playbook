@@ -214,6 +214,12 @@
                     valB = valB !== null ? parseFloat(valB) : -99999;
                     return sortAscending ? valA - valB : valB - valA;
                 }
+
+                if (sortKey === 'Play_Status') {
+                    valA = String(a._statusText || '').toLowerCase();
+                    valB = String(b._statusText || '').toLowerCase();
+                    return sortAscending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
                 
                 valA = String(valA || '').toLowerCase();
                 valB = String(valB || '').toLowerCase();
@@ -274,12 +280,7 @@
                     cell.style.width = col.width;
 
                     if (col.key === 'Ticker') {
-                        if (row.Ticker) {
-                            const tickerClean = String(row.Ticker).toUpperCase().trim();
-                            cell.innerHTML = `<a href="https://www.tradingview.com/symbols/${tickerClean}/" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-teal-400 px-2.5 py-1 rounded font-black text-xs border border-slate-700 transition-colors inline-block">${tickerClean} ↗</a>`;
-                        } else {
-                            cell.innerHTML = `<span class="text-slate-600">—</span>`;
-                        }
+                        cell.innerHTML = `<a href="https://www.tradingview.com/chart/?symbol=${row.Ticker || ''}" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-teal-400 px-2.5 py-1 rounded font-black text-xs border border-slate-700 transition-colors">${row.Ticker || 'N/A'}</a>`;
                     } else if (col.key === 'Play_Status') {
                         cell.innerHTML = `<span class="px-2.5 py-1 rounded-lg text-xs font-bold tracking-wider ${row._statusClasses}">${row._statusText}</span>`;
                     } else if (col.key === 'Scenario') {
