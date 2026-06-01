@@ -6,7 +6,7 @@
     <title>Wild Swing Trades • Live Playbook</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    
+   
     <style>
         .custom-scroll::-webkit-scrollbar { height: 14px; width: 14px; }
         .custom-scroll::-webkit-scrollbar-track { background: #020617; }
@@ -133,14 +133,18 @@
             let entryAvg = parseRangeAverage(row.Entry);
             if (entryAvg) {
                 let dev = (price - entryAvg) / entryAvg;
-                if (scenario.includes("BREAKOUT") && price >= entryAvg) {
-                    return { text: "🚀 BREAKOUT ACTIVE", classes: "bg-blue-950 text-blue-300 border border-blue-700/40" };
-                }
-                if (Math.abs(dev) <= 0.03) {
-                    return { text: "🎯 IN ENTRY ZONE", classes: "bg-emerald-950 text-emerald-300 border border-emerald-600/40" };
-                }
-                if (price < entryAvg && dev >= -0.08) {
-                    return { text: "📉 PULLBACK BUY ZONE", classes: "bg-amber-950 text-amber-300 border border-amber-600/40" };
+                
+                if (scenario.includes("BREAKOUT")) {
+                    if (price >= entryAvg && dev <= 0.10) {
+                        return { text: "🚀 BREAKOUT ACTIVE", classes: "bg-blue-950 text-blue-300 border border-blue-700/40" };
+                    }
+                } else {
+                    if (Math.abs(dev) <= 0.03) {
+                        return { text: "🎯 IN ENTRY ZONE", classes: "bg-emerald-950 text-emerald-300 border border-emerald-600/40" };
+                    }
+                    if (price < entryAvg && dev >= -0.08) {
+                        return { text: "📉 PULLBACK BUY ZONE", classes: "bg-amber-950 text-amber-300 border border-amber-600/40" };
+                    }
                 }
             }
 
@@ -205,25 +209,19 @@
                 return true;
             });
 
-            // --- REWRITTEN SORTING ENGINE ---
             currentFilteredData.sort((a, b) => {
-                let valA = a[sortKey];
-                let valB = b[sortKey];
+                let valA = sortKey === 'Play_Status' ? a._statusText : a[sortKey];
+                let valB = sortKey === 'Play_Status' ? b._statusText : b[sortKey];
 
-                // Numeric specific parsing rules
                 if (sortKey === 'Current_Price' || sortKey === 'Pct_Return') {
-                    valA = valA !== null ? parseFloat(valA) : (sortAscending ? -99999 : 99999);
-                    valB = valB !== null ? parseFloat(valB) : (sortAscending ? -99999 : 99999);
+                    valA = valA !== null ? parseFloat(valA) : -99999;
+                    valB = valB !== null ? parseFloat(valB) : -99999;
                     return sortAscending ? valA - valB : valB - valA;
                 }
                 
-                // Fallback clean strings logic 
-                valA = valA ? String(valA).toLowerCase().trim() : '';
-                valB = valB ? String(valB).toLowerCase().trim() : '';
-                
-                if (valA < valB) return sortAscending ? -1 : 1;
-                if (valA > valB) return sortAscending ? 1 : -1;
-                return 0;
+                valA = String(valA || '').toLowerCase();
+                valB = String(valB || '').toLowerCase();
+                return sortAscending ? valA.localeCompare(valB) : valB.localeCompare(valA);
             });
 
             document.getElementById('recordCount').innerText = `Rows: ${currentFilteredData.length}`;
@@ -282,7 +280,8 @@
                     if (col.key === 'Ticker') {
                         if (row.Ticker) {
                             const tickerClean = String(row.Ticker).toUpperCase().trim();
-                            cell.innerHTML = `<a href="https://www.tradingview.com/symbols/${tickerClean}/" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-teal-400 px-2.5 py-1 rounded font-black text-xs border border-slate-700 transition-colors inline-block">${tickerClean} ↗</a>`;
+                            // --- REMOVED THE ARROW STRING FROM INSIDE THE ANCHOR TAG HERE ---
+                            cell.innerHTML = `<a href="https://www.tradingview.com/symbols/${tickerClean}/" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-teal-400 px-2.5 py-1 rounded font-black text-xs border border-slate-700 transition-colors inline-block">${tickerClean}</a>`;
                         } else {
                             cell.innerHTML = `<span class="text-slate-600">—</span>`;
                         }
