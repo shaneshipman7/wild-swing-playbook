@@ -9,7 +9,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     
-    # ← This is the most important part
     permissions:
       contents: write
 
@@ -17,7 +16,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        persist-credentials: false   # Important for push
+        persist-credentials: false   # Keeps it secure
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -36,6 +35,8 @@ jobs:
       run: |
         git config --global user.name "GitHub Actions Bot"
         git config --global user.email "actions@github.com"
+        # Fix authentication so push works
+        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
         git add Master_Playbook_Database_*.csv Playbook_Watchlist_Import_*.txt
         git commit -m "🤖 Auto-update playbook data [skip ci]" || echo "No changes to commit"
         git push
