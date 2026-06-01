@@ -61,7 +61,7 @@
         </div>
 
         <div class="flex-1 table-wrapper custom-scroll border border-slate-800 bg-slate-900/40 backdrop-blur-xl rounded-xl overflow-auto">
-            <div class="min-w-[2400px] flex flex-col h-full">
+            <div class="min-w-[2300px] flex flex-col h-full">
                 <div id="tableHeaders" class="flex sticky top-0 bg-slate-900 border-b border-slate-700 z-20 shadow-md"></div>
                 <div id="tableBody" class="flex flex-col text-slate-200 divide-y divide-slate-800 overflow-y-auto flex-1"></div>
             </div>
@@ -80,6 +80,7 @@
         let sortKey = 'Date';
         let sortAscending = false;
 
+        // Cleaned up definition array: "Link/Research" column has been purged
         const columnDefinitions = [
             { key: 'Date', label: 'DATE', width: '110px' },
             { key: 'Ticker', label: 'TICKER', width: '90px' },
@@ -91,8 +92,7 @@
             { key: 'Targets', label: 'TARGET OBJECTIVES', width: '320px' },
             { key: 'R_R_Ratio', label: 'R:R RATIO', width: '110px' },
             { key: 'Est_Probability', label: 'EST. PROB.', width: '110px' },
-            { key: 'Pct_Return', label: '% RETURN', width: '120px' },
-            { key: 'Link', label: 'RESEARCH', width: '100px' }
+            { key: 'Pct_Return', label: '% RETURN', width: '120px' }
         ];
 
         function parseRangeAverage(val) {
@@ -205,7 +205,6 @@
                 return true;
             });
 
-            // --- ALL FIXES INCLUDED IN SORTING PASS ---
             currentFilteredData.sort((a, b) => {
                 let valA = sortKey === 'Play_Status' ? a._statusText : a[sortKey];
                 let valB = sortKey === 'Play_Status' ? b._statusText : b[sortKey];
@@ -309,12 +308,6 @@
                             const val = row.Pct_Return;
                             cell.className += val >= 0 ? " text-emerald-400" : " text-red-400";
                             cell.innerText = `${val >= 0 ? '+' : ''}${val.toFixed(2)}%`;
-                        }
-                    } else if (col.key === 'Link') {
-                        if (row.Link && row.Link.startsWith('http')) {
-                            cell.innerHTML = `<a href="${row.Link}" target="_blank" class="text-xs bg-slate-900 hover:bg-slate-800 text-blue-400 border border-slate-700 px-3 py-1 rounded-md font-bold">VIEW ↗</a>`;
-                        } else {
-                            cell.innerHTML = `<span class="text-slate-600">—</span>`;
                         }
                     } else {
                         cell.className += " text-slate-400 text-xs";
