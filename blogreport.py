@@ -1,10 +1,12 @@
 import feedparser
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo          # For accurate Eastern Time
+from zoneinfo import ZoneInfo
 import pandas as pd
 import yfinance as yf
 import time
+import glob
+import os
 
 # ================== CONFIG ==================
 DAYS_BACK = 7
@@ -12,19 +14,33 @@ BLOG_RSS = "https://wildswingtrades.blogspot.com/feeds/posts/default?alt=rss"
 # ============================================
 
 def is_us_market_open():
-    """Returns True ONLY during regular market hours (Mon-Fri 9:30 AM - 4:00 PM ET).
-    Skips weekends + after-hours instantly. Holidays ignored for speed."""
+    """Simple check if NYSE/NASDAQ is open (Mon-Fri 9:30 AM - 4:00 PM ET)."""
     ny_time = datetime.now(ZoneInfo("America/New_York"))
-    if ny_time.weekday() >= 5:  # Saturday or Sunday
+    if ny_time.weekday() >= 5:  # Sat or Sun
         return False
-    # Market open: 9:30 - 16:00 ET
     if ny_time.hour < 9 or (ny_time.hour == 9 and ny_time.minute < 30):
         return False
     if ny_time.hour >= 16:
         return False
     return True
 
-print(f"Starting Wild Swing Playbook Update - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+def load_last_known_prices():
+    """Load last known prices from the most recent Master_Playbook CSV file."""
+    csv_files = sorted(glob.glob("Master_Playbook_Database_*.csv"), reverse=True)
+    if not csv_files:
+        print("   No previous database found.")
+        return {}
+    
+    latest_file = csv_files[0]
+    try:
+        df_old = pd.read_csv(latest_file)
+        if 'Ticker' in df_old.columns and 'Current_Price' in df_old.columns:
+            price_map = df_old.groupby('Ticker')['Current_Price'].last().to_dict()
+            print(f"   ✅ Loaded last known prices from {os.path.basename(latest_file)}")
+            return price_map
+    except Exception as e:
+        print(f"   Warning: Could not load previous prices: {e}")
+    return {}
 
 def get_latest_playbook_plays():
     print("Fetching latest posts from blog...")
@@ -73,25 +89,11 @@ def get_latest_playbook_plays():
                             "Link": link
                         })
         except:
-            continue  # Skip problematic posts
+            continue
 
     df = pd.DataFrame(trade_rows)
     print(f"Extracted {len(df)} trade setups")
-    
-    # NEW FEATURE: Keep ONLY the newest post for each ticker (forget older posts)
-    # This ensures the dashboard always shows the latest analysis per symbol
-    if not df.empty:
-        df['Date'] = pd.to_datetime(df['Date'])
-        # Get the latest date per ticker
-        latest_dates = df.groupby('Ticker')['Date'].max().reset_index()
-        # Keep only rows matching the latest date for each ticker
-        df = df.merge(latest_dates, on=['Ticker', 'Date'], how='inner')
-        # Restore string format for CSV
-        df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
-        print(f"After keeping only newest post per ticker: {len(df)} rows")
-    
     return df
-
 
 def fetch_current_prices(tickers):
     print("Fetching current prices...")
@@ -111,47 +113,41 @@ def fetch_current_prices(tickers):
             prices[ticker] = None
     return prices
 
-
 # ====================== MAIN ======================
 if __name__ == "__main__":
     ny_time = datetime.now(ZoneInfo("America/New_York"))
     market_open = is_us_market_open()
     
-    if market_open:
-        print(f"Market is OPEN ({ny_time.strftime('%Y-%m-%d %H:%M %Z')}). Will refresh prices.")
-    else:
-        print(f"Market is CLOSED ({ny_time.strftime('%Y-%m-%d %H:%M %Z')}). Scraping playbook only (no price refresh).")
-    
-    # Always scrape latest blog posts
+    print(f"Starting Wild Swing Playbook Update - {ny_time.strftime('%Y-%m-%d %H:%M %Z')}")
+    print(f"Market status: {'OPEN 🟢' if market_open else 'CLOSED 🔵 (using last known prices)'}")
+
     df = get_latest_playbook_plays()
     
     if df.empty:
         print("No recent plays found. Creating empty file...")
         df = pd.DataFrame(columns=["Date","Ticker","Post_Title","Scenario","Entry","Stop_Loss","Targets","R_R_Ratio","Est_Probability","Link","Current_Price","Price_Updated"])
     else:
-        # Add prices ONLY if market is open
         if market_open:
+            print("🟢 Market open → Fetching fresh prices...")
             prices = fetch_current_prices(df["Ticker"].tolist())
-            df["Current_Price"] = df["Ticker"].map(prices)
-            df["Price_Updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
         else:
-            # Market closed - keep latest scenarios but note prices are not refreshed
-            print("Skipping price update - market is closed")
-            df["Price_Updated"] = f"Market closed ({ny_time.strftime('%Y-%m-%d')}) - prices not refreshed"
-            if "Current_Price" not in df.columns:
-                df["Current_Price"] = None
+            print("🔵 Market closed → Using last known prices from previous run")
+            prices = load_last_known_prices()
+        
+        df["Current_Price"] = df["Ticker"].map(prices)
+        df["Price_Updated"] = ny_time.strftime("%Y-%m-%d %H:%M")
+
+    # Save files (always create today's dated files)
+    today_str = ny_time.strftime("%Y-%m-%d")
     
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    
-    # Save files
     csv_filename = f"Master_Playbook_Database_{today_str}.csv"
     df.to_csv(csv_filename, index=False)
     print(f"Saved {csv_filename} ({len(df)} rows)")
     
-    unique_tickers = sorted([t for t in df["Ticker"].unique() if t != "MULTI"])
+    unique_tickers = sorted([t for t in df["Ticker"].unique() if t != "MULTI" and pd.notna(t)])
     tv_filename = f"Playbook_Watchlist_Import_{today_str}.txt"
     with open(tv_filename, "w") as f:
         f.write(",".join(unique_tickers))
     print(f"Saved {tv_filename} ({len(unique_tickers)} tickers)")
     
-    print("Playbook update completed successfully!")
+    print("✅ Playbook update completed successfully!")
