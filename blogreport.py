@@ -114,22 +114,32 @@ def fetch_current_prices(tickers):
 
 # ====================== MAIN ======================
 if __name__ == "__main__":
-    if not is_us_market_open():
-        ny_time = datetime.now(ZoneInfo("America/New_York"))
-        print(f"Market is currently closed ({ny_time.strftime('%Y-%m-%d %H:%M %Z')}). Skipping update.")
-        exit(0)
+    ny_time = datetime.now(ZoneInfo("America/New_York"))
+    market_open = is_us_market_open()
     
+    if market_open:
+        print(f"Market is OPEN ({ny_time.strftime('%Y-%m-%d %H:%M %Z')}). Will refresh prices.")
+    else:
+        print(f"Market is CLOSED ({ny_time.strftime('%Y-%m-%d %H:%M %Z')}). Scraping playbook only (no price refresh).")
+    
+    # Always scrape latest blog posts
     df = get_latest_playbook_plays()
     
     if df.empty:
         print("No recent plays found. Creating empty file...")
         df = pd.DataFrame(columns=["Date","Ticker","Post_Title","Scenario","Entry","Stop_Loss","Targets","R_R_Ratio","Est_Probability","Link","Current_Price","Price_Updated"])
-    
-    # Add prices
-    if not df.empty:
-        prices = fetch_current_prices(df["Ticker"].tolist())
-        df["Current_Price"] = df["Ticker"].map(prices)
-        df["Price_Updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+    else:
+        # Add prices ONLY if market is open
+        if market_open:
+            prices = fetch_current_prices(df["Ticker"].tolist())
+            df["Current_Price"] = df["Ticker"].map(prices)
+            df["Price_Updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        else:
+            # Market closed - keep latest scenarios but note prices are not refreshed
+            print("Skipping price update - market is closed")
+            df["Price_Updated"] = f"Market closed ({ny_time.strftime('%Y-%m-%d')}) - prices not refreshed"
+            if "Current_Price" not in df.columns:
+                df["Current_Price"] = None
     
     today_str = datetime.now().strftime("%Y-%m-%d")
     
