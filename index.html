@@ -6,7 +6,7 @@
     <title>Wild Swing Trades • Live Playbook</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-   
+    
     <style>
         .custom-scroll::-webkit-scrollbar { height: 14px; width: 14px; }
         .custom-scroll::-webkit-scrollbar-track { background: #020617; }
@@ -205,25 +205,25 @@
                 return true;
             });
 
+            // --- REWRITTEN SORTING ENGINE ---
             currentFilteredData.sort((a, b) => {
                 let valA = a[sortKey];
                 let valB = b[sortKey];
 
+                // Numeric specific parsing rules
                 if (sortKey === 'Current_Price' || sortKey === 'Pct_Return') {
-                    valA = valA !== null ? parseFloat(valA) : -99999;
-                    valB = valB !== null ? parseFloat(valB) : -99999;
+                    valA = valA !== null ? parseFloat(valA) : (sortAscending ? -99999 : 99999);
+                    valB = valB !== null ? parseFloat(valB) : (sortAscending ? -99999 : 99999);
                     return sortAscending ? valA - valB : valB - valA;
                 }
-
-                if (sortKey === 'Play_Status') {
-                    valA = String(a._statusText || '').toLowerCase();
-                    valB = String(b._statusText || '').toLowerCase();
-                    return sortAscending ? valA.localeCompare(valB) : valB.localeCompare(valA);
-                }
                 
-                valA = String(valA || '').toLowerCase();
-                valB = String(valB || '').toLowerCase();
-                return sortAscending ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                // Fallback clean strings logic 
+                valA = valA ? String(valA).toLowerCase().trim() : '';
+                valB = valB ? String(valB).toLowerCase().trim() : '';
+                
+                if (valA < valB) return sortAscending ? -1 : 1;
+                if (valA > valB) return sortAscending ? 1 : -1;
+                return 0;
             });
 
             document.getElementById('recordCount').innerText = `Rows: ${currentFilteredData.length}`;
@@ -280,7 +280,12 @@
                     cell.style.width = col.width;
 
                     if (col.key === 'Ticker') {
-                        cell.innerHTML = `<a href="https://www.tradingview.com/chart/?symbol=${row.Ticker || ''}" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-teal-400 px-2.5 py-1 rounded font-black text-xs border border-slate-700 transition-colors">${row.Ticker || 'N/A'}</a>`;
+                        if (row.Ticker) {
+                            const tickerClean = String(row.Ticker).toUpperCase().trim();
+                            cell.innerHTML = `<a href="https://www.tradingview.com/symbols/${tickerClean}/" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-teal-400 px-2.5 py-1 rounded font-black text-xs border border-slate-700 transition-colors inline-block">${tickerClean} ↗</a>`;
+                        } else {
+                            cell.innerHTML = `<span class="text-slate-600">—</span>`;
+                        }
                     } else if (col.key === 'Play_Status') {
                         cell.innerHTML = `<span class="px-2.5 py-1 rounded-lg text-xs font-bold tracking-wider ${row._statusClasses}">${row._statusText}</span>`;
                     } else if (col.key === 'Scenario') {
