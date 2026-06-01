@@ -5,23 +5,11 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import yfinance as yf
 import time
-import glob
-import os
 
 # ================== CONFIG ==================
-DAYS_BACK = 30
+DAYS_BACK = 90
 BLOG_RSS = "https://wildswingtrades.blogspot.com/feeds/posts/default?alt=rss"
 # ============================================
-
-def is_us_market_open():
-    ny_time = datetime.now(ZoneInfo("America/New_York"))
-    if ny_time.weekday() >= 5:
-        return False
-    if ny_time.hour < 9 or (ny_time.hour == 9 and ny_time.minute < 30):
-        return False
-    if ny_time.hour >= 16:
-        return False
-    return True
 
 def fetch_previous_close_prices(tickers):
     print("Fetching previous close prices...")
@@ -85,27 +73,28 @@ def get_latest_playbook_plays():
                             "Targets": cells[3] if len(cells) > 3 else "",
                             "R_R_Ratio": cells[5] if len(cells) > 5 else "",
                             "Est_Probability": cells[6] if len(cells) > 6 else "",
-                            "Link": link
+                            "Link": link,
+                            "Status": "TRACKING"
                         })
         except:
             continue
 
     df = pd.DataFrame(trade_rows)
-    print(f"Extracted {len(df)} trade setups from last {DAYS_BACK} days")
+    print(f"Extracted {len(df)} total plays from the last {DAYS_BACK} days")
     return df
 
 # ====================== MAIN ======================
 if __name__ == "__main__":
     ny_time = datetime.now(ZoneInfo("America/New_York"))
-    market_open = is_us_market_open()
+    market_open = True  # simplified
     
     print(f"Starting Wild Swing Playbook Update - {ny_time.strftime('%Y-%m-%d %H:%M %Z')}")
-    print(f"Market status: {'OPEN 🟢' if market_open else 'CLOSED 🔵 (using previous close prices)'}")
+    print(f"Market status: OPEN (using previous close prices)")
 
     df = get_latest_playbook_plays()
     
     if df.empty:
-        df = pd.DataFrame(columns=["Date","Ticker","Post_Title","Scenario","Entry","Stop_Loss","Targets","R_R_Ratio","Est_Probability","Link","Current_Price","Price_Updated"])
+        df = pd.DataFrame(columns=["Date","Ticker","Post_Title","Scenario","Entry","Stop_Loss","Targets","R_R_Ratio","Est_Probability","Link","Current_Price","Price_Updated","Status"])
     else:
         prices = fetch_previous_close_prices(df["Ticker"].tolist())
         df["Current_Price"] = df["Ticker"].map(prices)
@@ -124,7 +113,8 @@ if __name__ == "__main__":
         "Est_Probability": "",
         "Link": "https://github.com/shaneshipman7/wild-swing-playbook",
         "Current_Price": "",
-        "Price_Updated": "Data updated every 45 min"
+        "Price_Updated": "Data updated every 45 min",
+        "Status": ""
     }])
     df = pd.concat([disclaimer_row, df], ignore_index=True)
 
