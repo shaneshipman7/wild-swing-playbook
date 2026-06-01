@@ -9,7 +9,7 @@ import glob
 import os
 
 # ================== CONFIG ==================
-DAYS_BACK = 7
+DAYS_BACK = 30                    # ← Changed to 30 days
 BLOG_RSS = "https://wildswingtrades.blogspot.com/feeds/posts/default?alt=rss"
 # ============================================
 
@@ -24,8 +24,7 @@ def is_us_market_open():
     return True
 
 def fetch_previous_close_prices(tickers):
-    """When market closed, get official previous trading day's CLOSE prices."""
-    print("🔵 Market closed → Fetching previous close prices...")
+    print("Fetching previous close prices...")
     prices = {}
     for ticker in set(tickers):
         if ticker == "MULTI":
@@ -34,7 +33,6 @@ def fetch_previous_close_prices(tickers):
             stock = yf.Ticker(ticker)
             hist = stock.history(period="5d")
             if not hist.empty:
-                # Last close before today
                 prices[ticker] = round(hist['Close'].iloc[-1], 2)
                 print(f"   {ticker}: ${prices[ticker]} (previous close)")
             time.sleep(0.8)
@@ -56,6 +54,7 @@ def get_latest_playbook_plays():
             pub_date = datetime(*entry.published_parsed[:6])
             if pub_date < cutoff:
                 continue
+                
             title = entry.title
             link = entry.link
             date_str = pub_date.strftime("%Y-%m-%d")
@@ -68,7 +67,9 @@ def get_latest_playbook_plays():
                 rows = table.find_all("tr")
                 if not rows:
                     continue
+                    
                 headers = [cell.get_text(strip=True).lower() for cell in rows[0].find_all(["th", "td"])]
+                
                 if any("scenario" in h for h in headers) and any("entry" in h for h in headers):
                     for row in rows[1:]:
                         cells = [cell.get_text(strip=True) for cell in row.find_all(["td", "th"])]
@@ -90,6 +91,13 @@ def get_latest_playbook_plays():
             continue
 
     df = pd.DataFrame(trade_rows)
+    
+    # === KEEP ONLY THE MOST RECENT SETUP PER TICKER ===
+    if not df.empty:
+        df = df.sort_values(by=['Ticker', 'Date'], ascending=[True, False])
+        df = df.drop_duplicates(subset=['Ticker'], keep='first')
+        print(f"After deduplication: {len(df)} unique tickers (most recent setup only)")
+    
     print(f"Extracted {len(df)} trade setups")
     return df
 
@@ -106,24 +114,16 @@ if __name__ == "__main__":
     if df.empty:
         df = pd.DataFrame(columns=["Date","Ticker","Post_Title","Scenario","Entry","Stop_Loss","Targets","R_R_Ratio","Est_Probability","Link","Current_Price","Price_Updated"])
     else:
-        if market_open:
-            print("🟢 Market open → Fetching live prices...")
-            prices = {}  # reuse the old function or add live if needed
-            # (we can keep simple live fetch if you want, but for now using previous-close style for consistency)
-            stock_prices = fetch_previous_close_prices(df["Ticker"].tolist())  # even when open we can use latest close, but change to live if preferred
-        else:
-            print("🔵 Market closed → Using previous close prices")
-            prices = fetch_previous_close_prices(df["Ticker"].tolist())
-        
+        prices = fetch_previous_close_prices(df["Ticker"].tolist())
         df["Current_Price"] = df["Ticker"].map(prices)
         df["Price_Updated"] = ny_time.strftime("%Y-%m-%d %H:%M")
 
-    # === DISCLAIMER ROW (visible to anyone opening the CSV) ===
+    # Disclaimer row
     disclaimer_row = pd.DataFrame([{
         "Date": "⚠️ DISCLAIMER",
         "Ticker": "EXPERIMENTAL DATA ONLY",
         "Post_Title": "Accuracy NOT guaranteed • NOT financial advice • Use at your own risk",
-        "Scenario": "See README.md for full disclaimers",
+        "Scenario": "See README for full details",
         "Entry": "",
         "Stop_Loss": "",
         "Targets": "",
