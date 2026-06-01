@@ -42,7 +42,7 @@
                         </label>
                     </div>
                     <div id="connectionStatus" class="px-4 py-2 bg-amber-950/60 border border-amber-500 rounded-xl text-amber-400 font-bold flex items-center gap-2 text-xs animate-pulse">
-                        ⏳ FETCHING FROM GITHUB...
+                        ⏳ FETCHING STABLE DATA...
                     </div>
                 </div>
             </div>
@@ -73,8 +73,8 @@
     </div>
 
     <script>
-        // CONFIGURATION: Points clean to GitHub raw storage context URLs
-        const repoBaseUrl = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/";
+        // Directly maps straight to your stable repository file context
+        const stableFileUrl = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_2026-05-31.csv";
         
         let rawPlaybookData = [];
         let currentFilteredData = [];
@@ -148,67 +148,42 @@
             return { text: "🏁 PASSED / MONITORING", classes: "bg-slate-900 text-slate-400 border border-slate-800" };
         }
 
-        // Waterfall pipeline loading system to prevent 404 blank outs
         async function fetchPlaybookCSV() {
             const statusEl = document.getElementById('connectionStatus');
-            
-            const todayStr = new Date().toISOString().slice(0, 10);
-            const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-            
-            // Waterfall order checklist
-            const urlTargets = [
-                `${repoBaseUrl}Master_Playbook_Database_${todayStr}.csv`,
-                `${repoBaseUrl}Master_Playbook_Database_${yesterdayStr}.csv`,
-                `${repoBaseUrl}Master_Playbook_Database_2026-05-31.csv` // Fixed safety file fallback
-            ];
+            try {
+                let response = await fetch(stableFileUrl);
+                if (!response.ok) throw new Error("File could not be requested");
+                let loadedText = await response.text();
 
-            let loadedText = null;
-            let finalActiveUrl = "";
+                Papa.parse(loadedText, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        rawPlaybookData = results.data.map(row => {
+                            let price = parseFloat(row.Current_Price);
+                            if (isNaN(price)) price = null;
+                            
+                            let calculatedReturn = calculatePctReturn(row, price);
+                            let statusInfo = evaluatePlayStatus(row, price);
 
-            for (let url of urlTargets) {
-                try {
-                    let response = await fetch(url);
-                    if (response.ok) {
-                        loadedText = await response.text();
-                        finalActiveUrl = url;
-                        break;
+                            return {
+                                ...row,
+                                Current_Price: price,
+                                Pct_Return: calculatedReturn,
+                                _statusText: statusInfo.text,
+                                _statusClasses: statusInfo.classes
+                            };
+                        });
+
+                        statusEl.className = "px-4 py-2 bg-emerald-950 border border-emerald-500 rounded-xl text-emerald-400 font-bold text-xs";
+                        statusEl.innerHTML = "● REPO CONNECTED";
+                        executeFilterAndRender();
                     }
-                } catch (err) {
-                    console.log("Searching alternative file layer...");
-                }
-            }
-
-            if (!loadedText) {
+                });
+            } catch (err) {
                 statusEl.className = "px-4 py-2 bg-red-950 border border-red-500 rounded-xl text-red-400 font-bold text-xs";
-                statusEl.innerHTML = "❌ NO REPO DATA FOUND";
-                return;
+                statusEl.innerHTML = "❌ TARGET FILE NOT FOUND";
             }
-
-            Papa.parse(loadedText, {
-                header: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    rawPlaybookData = results.data.map(row => {
-                        let price = parseFloat(row.Current_Price);
-                        if (isNaN(price)) price = null;
-                        
-                        let calculatedReturn = calculatePctReturn(row, price);
-                        let statusInfo = evaluatePlayStatus(row, price);
-
-                        return {
-                            ...row,
-                            Current_Price: price,
-                            Pct_Return: calculatedReturn,
-                            _statusText: statusInfo.text,
-                            _statusClasses: statusInfo.classes
-                        };
-                    });
-
-                    statusEl.className = "px-4 py-2 bg-emerald-950 border border-emerald-500 rounded-xl text-emerald-400 font-bold text-xs";
-                    statusEl.innerHTML = "● DATA REPO LIVE";
-                    executeFilterAndRender();
-                }
-            });
         }
 
         function executeFilterAndRender() {
