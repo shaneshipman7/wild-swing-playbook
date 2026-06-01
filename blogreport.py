@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo          # For accurate Eastern Time
 import pandas as pd
 import yfinance as yf
 import time
+import os
 
 # ================== CONFIG ==================
 DAYS_BACK = 7
@@ -25,6 +26,7 @@ def is_us_market_open():
     return True
 
 print(f"Starting Wild Swing Playbook Update - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+
 
 def get_latest_playbook_plays():
     print("Fetching latest posts from blog...")
@@ -76,9 +78,19 @@ def get_latest_playbook_plays():
             continue  # Skip problematic posts
 
     df = pd.DataFrame(trade_rows)
-    print(f"Extracted {len(df)} trade setups")
+    print(f"Extracted {len(df)} trade setups before deduplication")
+    
+    # NEW: Keep ONLY the newest post for each ticker
+    if not df.empty:
+        df['Date'] = pd.to_datetime(df['Date'])
+        # Get the latest date for each ticker
+        latest_dates = df.groupby('Ticker')['Date'].max().reset_index()
+        # Filter to only rows from those latest dates
+        df = df.merge(latest_dates, on=['Ticker', 'Date'], how='inner')
+        df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
+        print(f"After keeping only newest post per ticker: {len(df)} rows")
+    
     return df
-
 
 def fetch_current_prices(tickers):
     print("Fetching current prices...")
@@ -101,10 +113,14 @@ def fetch_current_prices(tickers):
 
 # ====================== MAIN ======================
 if __name__ == "__main__":
-    if not is_us_market_open():
+    # Allow forcing update for testing (set FORCE_UPDATE=true in GitHub workflow or env)
+    force_update = os.getenv("FORCE_UPDATE", "false").lower() == "true"
+    if not is_us_market_open() and not force_update:
         ny_time = datetime.now(ZoneInfo("America/New_York"))
-        print(f"⛔ Market is currently closed ({ny_time.strftime('%Y-%m-%d %H:%M %Z')}). Skipping update.")
+        print(f"⛔ Market is currently closed ({ny_time.strftime('%Y-%m-%d %H:%M %Z')}). Skipping update. (Use FORCE_UPDATE=true to override)")
         exit(0)
+    elif force_update:
+        print("🚀 FORCE_UPDATE enabled - bypassing market hours check")
     
     df = get_latest_playbook_plays()
     
