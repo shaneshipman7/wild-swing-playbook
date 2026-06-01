@@ -2,7 +2,7 @@ name: Update Wild Swing Playbook Data
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '*/45 * * * *'
   workflow_dispatch:
 
 jobs:
