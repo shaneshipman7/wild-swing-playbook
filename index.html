@@ -8,9 +8,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
    
     <style>
-        .custom-scroll::-webkit-scrollbar { height: 12px; width: 12px; }
+        .custom-scroll::-webkit-scrollbar { height: 14px; width: 14px; }
         .custom-scroll::-webkit-scrollbar-track { background: #020617; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; border: 3px solid #020617; }
         .table-wrapper { height: calc(100vh - 240px); overflow: auto; }
         .table-cell { font-size: 0.95rem; line-height: 1.5; font-weight: 500; padding: 12px 16px; flex-shrink: 0; display: flex; align-items: center; }
         .header-cell { font-size: 0.85rem; line-height: 1.35; white-space: nowrap; font-weight: 700; padding: 12px 16px; flex-shrink: 0; cursor: pointer; user-select: none; }
@@ -42,7 +42,7 @@
                         </label>
                     </div>
                     <div id="connectionStatus" class="px-4 py-2 bg-amber-950/60 border border-amber-500 rounded-xl text-amber-400 font-bold flex items-center gap-2 text-xs animate-pulse">
-                        ⏳ SYNCING
+                        ⏳ FETCHING FROM GITHUB...
                     </div>
                 </div>
             </div>
@@ -51,7 +51,7 @@
         <div class="flex-shrink-0 flex flex-col sm:flex-row gap-4 mb-4 items-stretch sm:items-center justify-between">
             <div class="relative flex-1 max-w-md">
                 <span class="absolute left-4 top-3 text-slate-500">🔍</span>
-                <input type="text" id="searchInput" placeholder="Search symbol, strategy, or status..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-11 py-2 text-sm focus:outline-none focus:border-teal-400 text-slate-100">
+                <input type="text" id="searchInput" placeholder="Search symbol, strategy, or terms..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-11 py-2 text-sm focus:outline-none focus:border-teal-400 text-slate-100">
             </div>
             <div class="text-xs text-slate-400 flex items-center gap-2">
                 <span>💡 Click column headers to sort</span>
@@ -73,15 +73,14 @@
     </div>
 
     <script>
-        // Production API endpoint fallback pipeline
-        const liveDatabaseUrl = "https://wst.dfwsas.com"; 
+        // CONFIGURATION: Points clean to GitHub raw storage context URLs
+        const repoBaseUrl = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/";
         
         let rawPlaybookData = [];
         let currentFilteredData = [];
         let sortKey = 'Date';
         let sortAscending = false;
 
-        // Structured display layout parameters
         const columnDefinitions = [
             { key: 'Date', label: 'DATE', width: '110px' },
             { key: 'Ticker', label: 'TICKER', width: '90px' },
@@ -97,7 +96,6 @@
             { key: 'Link', label: 'RESEARCH', width: '100px' }
         ];
 
-        // Helper calculation definitions
         function parseRangeAverage(val) {
             if (!val) return null;
             let clean = String(val).replace(/[\$,]/g, '').trim();
@@ -121,7 +119,6 @@
             const ticker = String(row.Ticker).toUpperCase().trim();
             const scenario = String(row.Scenario).toUpperCase();
             
-            // Override boundary rules from playbook strategy definitions
             if (ticker === "MFA" && price >= 9.20 && price <= 9.80) return { text: "✅ ACTIONABLE PULLBACK", classes: "bg-emerald-950 text-emerald-400 border border-emerald-500/30" };
             if (ticker === "ELF" && price >= 53 && price <= 58) return { text: "✅ ACTIONABLE PULLBACK", classes: "bg-emerald-950 text-emerald-400 border border-emerald-500/30" };
             if (ticker === "HEI" && price >= 345) return { text: "✅ BREAKOUT TRIGGERED", classes: "bg-blue-950 text-blue-400 border border-blue-500/30" };
@@ -129,7 +126,6 @@
             if (ticker === "TE" && price >= 9.80 && price <= 11.5) return { text: "✅ IN RANGE / ACTIONABLE", classes: "bg-teal-950 text-teal-400 border border-teal-500/30" };
             if (ticker === "PIII" && price >= 16.00) return { text: "✅ BREAKOUT TRIGGERED", classes: "bg-blue-950 text-blue-400 border border-blue-500/30" };
 
-            // General evaluation algorithm mapping
             let stopAvg = parseRangeAverage(row.Stop_Loss);
             if (stopAvg && price <= stopAvg) {
                 return { text: "❌ STOPPED OUT", classes: "bg-red-950/80 text-red-400 border border-red-900" };
@@ -152,58 +148,67 @@
             return { text: "🏁 PASSED / MONITORING", classes: "bg-slate-900 text-slate-400 border border-slate-800" };
         }
 
-        // Live Loader Core Engine
-        async function loadPlaybookDatabase() {
+        // Waterfall pipeline loading system to prevent 404 blank outs
+        async function fetchPlaybookCSV() {
             const statusEl = document.getElementById('connectionStatus');
-            try {
-                const response = await fetch(liveDatabaseUrl);
-                if (!response.ok) throw new Error();
-                const csvText = await response.text();
-                
-                Papa.parse(csvText, {
-                    header: true,
-                    skipEmptyLines: true,
-                    complete: function(results) {
-                        processParsedRecords(results.data);
-                        statusEl.className = "px-4 py-2 bg-emerald-950 border border-emerald-500 rounded-xl text-emerald-400 font-bold flex items-center gap-2 text-xs";
-                        statusEl.innerHTML = "● LIVE STREAM";
+            
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+            
+            // Waterfall order checklist
+            const urlTargets = [
+                `${repoBaseUrl}Master_Playbook_Database_${todayStr}.csv`,
+                `${repoBaseUrl}Master_Playbook_Database_${yesterdayStr}.csv`,
+                `${repoBaseUrl}Master_Playbook_Database_2026-05-31.csv` // Fixed safety file fallback
+            ];
+
+            let loadedText = null;
+            let finalActiveUrl = "";
+
+            for (let url of urlTargets) {
+                try {
+                    let response = await fetch(url);
+                    if (response.ok) {
+                        loadedText = await response.text();
+                        finalActiveUrl = url;
+                        break;
                     }
-                });
-            } catch (error) {
-                // If local browser hits a CORS block, immediately engage backup database parsing
-                statusEl.className = "px-4 py-2 bg-blue-950 border border-blue-500 rounded-xl text-blue-400 font-bold flex items-center gap-2 text-xs animate-none";
-                statusEl.innerHTML = "💾 DATABASE ACTIVE";
-                
-                // Embedded standard tracking dataset structure
-                const backupCSV = `Date,Ticker,Post_Title,Scenario,Entry,Stop_Loss,Targets,R_R_Ratio,Est_Probability,Link,Current_Price,Price_Updated\n2026-05-30,RCAT,RCAT,Bullish Pullback BuyPRIMARY,$13.00 – $13.80,Below $11.80 – $12.20,$16.50 (T1),1:2.0+,~55–65%,https://wildswingtrades.blogspot.com,14.50,2026-05-31\n2026-05-29,MFA,MFA Swing,Bullish Pullback BuyPRIMARY,$9.20 – $9.50,Below $8.80 – $9.00,$10.50 (T1),1:2.0+,~60–70%,https://wildswingtrades.blogspot.com,9.60,2026-05-31\n2026-05-28,ELF,ELF,Bullish Pullback BuyPRIMARY,$53 – $56,Below $49 – $50,$65 (T1),1:2.0+,~58–68%,https://wildswingtrades.blogspot.com,56.00,2026-05-31\n2026-05-28,HEI,HEI,Breakout ContinuationAGGRESSIVE,Above $345 – $350,Below $310,$370 (T1),1:2.5+,~55–65%,https://wildswingtrades.blogspot.com,348.18,2026-05-31\n2026-05-28,LLY,LLY - Breaking It Down,Bullish Pullback BuyPRIMARY STRATEGY,$1021.70 – $1055.00,Below $847.79,$1282.55,1:0.8,~60–70%,https://wildswingtrades.blogspot.com,1105.00,2026-05-31`;
-                
-                Papa.parse(backupCSV, {
-                    header: true,
-                    skipEmptyLines: true,
-                    complete: function(results) {
-                        processParsedRecords(results.data);
-                    }
-                });
+                } catch (err) {
+                    console.log("Searching alternative file layer...");
+                }
             }
-        }
 
-        function processParsedRecords(data) {
-            rawPlaybookData = data.map(row => {
-                let price = parseFloat(row.Current_Price);
-                if (isNaN(price)) price = null;
-                
-                let calculatedReturn = calculatePctReturn(row, price);
-                let statusInfo = evaluatePlayStatus(row, price);
+            if (!loadedText) {
+                statusEl.className = "px-4 py-2 bg-red-950 border border-red-500 rounded-xl text-red-400 font-bold text-xs";
+                statusEl.innerHTML = "❌ NO REPO DATA FOUND";
+                return;
+            }
 
-                return {
-                    ...row,
-                    Current_Price: price,
-                    Pct_Return: calculatedReturn,
-                    _statusText: statusInfo.text,
-                    _statusClasses: statusInfo.classes
-                };
+            Papa.parse(loadedText, {
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    rawPlaybookData = results.data.map(row => {
+                        let price = parseFloat(row.Current_Price);
+                        if (isNaN(price)) price = null;
+                        
+                        let calculatedReturn = calculatePctReturn(row, price);
+                        let statusInfo = evaluatePlayStatus(row, price);
+
+                        return {
+                            ...row,
+                            Current_Price: price,
+                            Pct_Return: calculatedReturn,
+                            _statusText: statusInfo.text,
+                            _statusClasses: statusInfo.classes
+                        };
+                    });
+
+                    statusEl.className = "px-4 py-2 bg-emerald-950 border border-emerald-500 rounded-xl text-emerald-400 font-bold text-xs";
+                    statusEl.innerHTML = "● DATA REPO LIVE";
+                    executeFilterAndRender();
+                }
             });
-            executeFilterAndRender();
         }
 
         function executeFilterAndRender() {
@@ -331,7 +336,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             renderTableHeaders();
-            loadPlaybookDatabase();
+            fetchPlaybookCSV();
 
             document.getElementById('searchInput').addEventListener('input', executeFilterAndRender);
             document.getElementById('showPassed').addEventListener('change', executeFilterAndRender);
