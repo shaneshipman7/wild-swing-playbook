@@ -9,7 +9,7 @@ import glob
 import os
 
 # ================== CONFIG ==================
-DAYS_BACK = 30                    # ← Changed to 30 days
+DAYS_BACK = 30
 BLOG_RSS = "https://wildswingtrades.blogspot.com/feeds/posts/default?alt=rss"
 # ============================================
 
@@ -91,14 +91,7 @@ def get_latest_playbook_plays():
             continue
 
     df = pd.DataFrame(trade_rows)
-    
-    # === KEEP ONLY THE MOST RECENT SETUP PER TICKER ===
-    if not df.empty:
-        df = df.sort_values(by=['Ticker', 'Date'], ascending=[True, False])
-        df = df.drop_duplicates(subset=['Ticker'], keep='first')
-        print(f"After deduplication: {len(df)} unique tickers (most recent setup only)")
-    
-    print(f"Extracted {len(df)} trade setups")
+    print(f"Extracted {len(df)} trade setups from last {DAYS_BACK} days")
     return df
 
 # ====================== MAIN ======================
