@@ -1,6 +1,7 @@
 import feedparser
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo          # For accurate Eastern Time
 import pandas as pd
 import yfinance as yf
 import time
@@ -10,10 +11,23 @@ DAYS_BACK = 7
 BLOG_RSS = "https://wildswingtrades.blogspot.com/feeds/posts/default?alt=rss"
 # ============================================
 
-print(f"🚀 Starting Wild Swing Playbook Update - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+def is_us_market_open():
+    """Returns True ONLY during regular market hours (Mon-Fri 9:30 AM - 4:00 PM ET).
+    Skips weekends + after-hours instantly. Holidays ignored for speed."""
+    ny_time = datetime.now(ZoneInfo("America/New_York"))
+    if ny_time.weekday() >= 5:  # Saturday or Sunday
+        return False
+    # Market open: 9:30 - 16:00 ET
+    if ny_time.hour < 9 or (ny_time.hour == 9 and ny_time.minute < 30):
+        return False
+    if ny_time.hour >= 16:
+        return False
+    return True
+
+print(f"Starting Wild Swing Playbook Update - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 
 def get_latest_playbook_plays():
-    print("🔍 Fetching latest posts from blog...")
+    print("Fetching latest posts from blog...")
     feed = feedparser.parse(BLOG_RSS)
     print(f"   Found {len(feed.entries)} total posts in feed")
     
@@ -62,12 +76,12 @@ def get_latest_playbook_plays():
             continue  # Skip problematic posts
 
     df = pd.DataFrame(trade_rows)
-    print(f"✅ Extracted {len(df)} trade setups")
+    print(f"Extracted {len(df)} trade setups")
     return df
 
 
 def fetch_current_prices(tickers):
-    print("📈 Fetching current prices...")
+    print("Fetching current prices...")
     prices = {}
     for ticker in set(tickers):
         if ticker == "MULTI":
@@ -80,17 +94,22 @@ def fetch_current_prices(tickers):
                 print(f"   {ticker}: ${prices[ticker]}")
             time.sleep(0.8)
         except Exception as e:
-            print(f"   ⚠️ Failed to get price for {ticker}")
+            print(f"   Failed to get price for {ticker}")
             prices[ticker] = None
     return prices
 
 
 # ====================== MAIN ======================
 if __name__ == "__main__":
+    if not is_us_market_open():
+        ny_time = datetime.now(ZoneInfo("America/New_York"))
+        print(f"⛔ Market is currently closed ({ny_time.strftime('%Y-%m-%d %H:%M %Z')}). Skipping update.")
+        exit(0)
+    
     df = get_latest_playbook_plays()
     
     if df.empty:
-        print("⚠️ No recent plays found. Creating empty file...")
+        print("No recent plays found. Creating empty file...")
         df = pd.DataFrame(columns=["Date","Ticker","Post_Title","Scenario","Entry","Stop_Loss","Targets","R_R_Ratio","Est_Probability","Link","Current_Price","Price_Updated"])
     
     # Add prices
@@ -104,12 +123,12 @@ if __name__ == "__main__":
     # Save files
     csv_filename = f"Master_Playbook_Database_{today_str}.csv"
     df.to_csv(csv_filename, index=False)
-    print(f"💾 Saved {csv_filename} ({len(df)} rows)")
+    print(f"Saved {csv_filename} ({len(df)} rows)")
     
     unique_tickers = sorted([t for t in df["Ticker"].unique() if t != "MULTI"])
     tv_filename = f"Playbook_Watchlist_Import_{today_str}.txt"
     with open(tv_filename, "w") as f:
         f.write(",".join(unique_tickers))
-    print(f"💾 Saved {tv_filename} ({len(unique_tickers)} tickers)")
+    print(f"Saved {tv_filename} ({len(unique_tickers)} tickers)")
     
-    print("🎉 Playbook update completed successfully!")
+    print("Playbook update completed successfully!")
