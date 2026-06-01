@@ -5,7 +5,6 @@ from zoneinfo import ZoneInfo          # For accurate Eastern Time
 import pandas as pd
 import yfinance as yf
 import time
-import os
 
 # ================== CONFIG ==================
 DAYS_BACK = 7
@@ -26,7 +25,6 @@ def is_us_market_open():
     return True
 
 print(f"Starting Wild Swing Playbook Update - {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-
 
 def get_latest_playbook_plays():
     print("Fetching latest posts from blog...")
@@ -78,19 +76,22 @@ def get_latest_playbook_plays():
             continue  # Skip problematic posts
 
     df = pd.DataFrame(trade_rows)
-    print(f"Extracted {len(df)} trade setups before deduplication")
+    print(f"Extracted {len(df)} trade setups")
     
-    # NEW: Keep ONLY the newest post for each ticker
+    # NEW FEATURE: Keep ONLY the newest post for each ticker (forget older posts)
+    # This ensures the dashboard always shows the latest analysis per symbol
     if not df.empty:
         df['Date'] = pd.to_datetime(df['Date'])
-        # Get the latest date for each ticker
+        # Get the latest date per ticker
         latest_dates = df.groupby('Ticker')['Date'].max().reset_index()
-        # Filter to only rows from those latest dates
+        # Keep only rows matching the latest date for each ticker
         df = df.merge(latest_dates, on=['Ticker', 'Date'], how='inner')
+        # Restore string format for CSV
         df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
         print(f"After keeping only newest post per ticker: {len(df)} rows")
     
     return df
+
 
 def fetch_current_prices(tickers):
     print("Fetching current prices...")
@@ -113,14 +114,10 @@ def fetch_current_prices(tickers):
 
 # ====================== MAIN ======================
 if __name__ == "__main__":
-    # Allow forcing update for testing (set FORCE_UPDATE=true in GitHub workflow or env)
-    force_update = os.getenv("FORCE_UPDATE", "false").lower() == "true"
-    if not is_us_market_open() and not force_update:
+    if not is_us_market_open():
         ny_time = datetime.now(ZoneInfo("America/New_York"))
-        print(f"⛔ Market is currently closed ({ny_time.strftime('%Y-%m-%d %H:%M %Z')}). Skipping update. (Use FORCE_UPDATE=true to override)")
+        print(f"Market is currently closed ({ny_time.strftime('%Y-%m-%d %H:%M %Z')}). Skipping update.")
         exit(0)
-    elif force_update:
-        print("🚀 FORCE_UPDATE enabled - bypassing market hours check")
     
     df = get_latest_playbook_plays()
     
