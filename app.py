@@ -152,18 +152,28 @@ def enrich_with_live_prices(df):
     df['Live Price'] = df['Ticker'].map(live_prices)
     return df
 
+# Load data FIRST (before any UI that depends on it)
+lookback_days_default = 30
+raw_plays = get_raw_playbook(lookback_days_default)
+working_df = pd.DataFrame(raw_plays)
+for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Blog Link', 'Pub Date', 'Days Old']:
+    if col not in working_df.columns: working_df[col] = ""
+working_df = enrich_with_live_prices(working_df)
+working_df = compute_matrix_metrics(working_df)
+working_df['Chart Link'] = working_df['Ticker'].apply(lambda t: f"https://www.tradingview.com/symbols/{str(t).upper()}/")
+
 if HAS_AUTOREFRESH:
     st_autorefresh(interval=25 * 1000, limit=200, key="price_autorefresh")
 
 with st.sidebar:
     st.header("Controls")
-    lookback_days = st.slider("Look back (days) from blog", 7, 90, 30, 1, help="How far back to pull plays from your blog posts.")
+    lookback_days = st.slider("Look back (days) from blog", 7, 90, lookback_days_default, 1, help="How far back to pull plays from your blog posts.")
     
     st.subheader("Filters")
-    # Dynamic status options so we always have every status that exists in the data
-    status_options = sorted(working_df['Play Status'].dropna().unique().tolist()) if 'working_df' in dir() else ["🟢 IN ENTRY ZONE", "🟢 Momentum / Breakout Setup", "⏳ Monitoring Setup"]
-    selected_statuses = st.multiselect("Play Status (select to filter)", options=status_options, default=status_options, help="Select which statuses to show. Uncheck any you want to hide (e.g. uncheck IN ENTRY ZONE to filter them out).")
-    ticker_filter = st.text_input("Ticker contains", "", help="Partial ticker match (e.g. type XPO or UMAC)")
+    # Safe dynamic status options (data already loaded above)
+    status_options = sorted(working_df['Play Status'].dropna().unique().tolist())
+    selected_statuses = st.multiselect("Play Status", options=status_options, default=status_options, help="Uncheck any status to filter it out (e.g. uncheck IN ENTRY ZONE)")
+    ticker_filter = st.text_input("Ticker contains", "", help="Partial ticker match")
     
     if st.button("🔄 Force Full Refresh (Blog + Prices)", use_container_width=True):
         st.cache_data.clear()
@@ -173,13 +183,15 @@ with st.sidebar:
     st.divider()
     st.caption("Blog data refreshes every ~30 min. Live prices ~every 25s.")
 
-raw_plays = get_raw_playbook(lookback_days)
-working_df = pd.DataFrame(raw_plays)
-for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Blog Link', 'Pub Date', 'Days Old']:
-    if col not in working_df.columns: working_df[col] = ""
-working_df = enrich_with_live_prices(working_df)
-working_df = compute_matrix_metrics(working_df)
-working_df['Chart Link'] = working_df['Ticker'].apply(lambda t: f"https://www.tradingview.com/symbols/{str(t).upper()}/")
+# Re-load if lookback changed (cheap because of cache)
+if lookback_days != lookback_days_default:
+    raw_plays = get_raw_playbook(lookback_days)
+    working_df = pd.DataFrame(raw_plays)
+    for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Blog Link', 'Pub Date', 'Days Old']:
+        if col not in working_df.columns: working_df[col] = ""
+    working_df = enrich_with_live_prices(working_df)
+    working_df = compute_matrix_metrics(working_df)
+    working_df['Chart Link'] = working_df['Ticker'].apply(lambda t: f"https://www.tradingview.com/symbols/{str(t).upper()}/")
 
 # Apply filters
 filtered_df = working_df.copy()
@@ -195,7 +207,7 @@ m3.metric("Data Window", f"Last {lookback_days} days from blog")
 m4.metric("Last Updated", datetime.now().strftime("%H:%M:%S"))
 
 st.markdown("### 📋 Active Playbook — Live from Your Wild Swing Trades Blog")
-st.caption("Use sidebar filters to focus on IN ENTRY ZONE, Momentum, or specific tickers. The status dropdown now shows every status present in your data.")
+st.caption("Sidebar filters let you include/exclude any status (including IN ENTRY ZONE). Status list is now complete and dynamic.")
 
 ordered_cols = ['Ticker', 'Scenario', 'Play Status', 'Live Price', 'Entry', 'Stop_Loss', 'Targets', 'Est. Return', 'R:R Ratio', 'Pub Date', 'Blog Link', 'Chart Link']
 display_df = filtered_df[[c for c in ordered_cols if c in filtered_df.columns]]
@@ -215,12 +227,11 @@ st.dataframe(display_df, column_config={
     "Chart Link": st.column_config.LinkColumn("Chart", display_text="TradingView ↗", width="small")
 }, hide_index=True, use_container_width=True, height=420)
 
-with st.expander("💡 How to use the filters"):
+with st.expander("💡 Filter tips"):
     st.markdown("""
-    - **Play Status dropdown**: Select/unselect any statuses. To hide all "IN ENTRY ZONE" plays, simply uncheck that option.
-    - The list now includes **every status** that exists in your current data (no more missing ones).
-    - Use **Ticker contains** for quick symbol search.
-    - Combine with the lookback slider for powerful control.
+    - Use the **Play Status** multiselect to show/hide specific statuses (e.g. hide all IN ENTRY ZONE).
+    - The dropdown now contains **every status** present in your data.
+    - Combine with lookback slider + ticker search for precise control.
     """)
 
-st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3.3 (dynamic status filter) • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
+st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3.4 (stable filters) • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
