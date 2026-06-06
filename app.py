@@ -2,10 +2,11 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import time
+import re
 from datetime import datetime
 
 # ====================================================================
-# 1. PAGE SETUP & HIGH-CONTRAST DARK LAYOUT
+# 1. PAGE SETUP & HIGH-CONTRAST SYSTEM LAYOUT
 # ====================================================================
 st.set_page_config(
     page_title="Wild Swing Trades • Live Playbook",
@@ -13,7 +14,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Enforces crisp white text and deep dark backgrounds for maximum visibility
 st.markdown("""
     <style>
         .main, [data-testid="stAppViewContainer"] { 
@@ -48,13 +48,9 @@ st.markdown("<p class='disclaimer'>⚠️ Educational & Technical Analysis Only 
 st.markdown("---")
 
 # ====================================================================
-# 2. FIXED FRESH HARDCODED DATASET (FROM SCRATCH)
+# 2. FRESH SCRATCH DATASET ARCHIVE
 # ====================================================================
 def load_clean_scratch_data():
-    """
-    Completely discards the messy remote CSV.
-    Re-establishes a precise, baseline dictionary matrix scraped from the primary playbook structures.
-    """
     scratch_playbook = [
         # --- XPO SETUPS ---
         {"Ticker": "XPO", "Scenario": "Bullish Breakout Expansion", "Entry": "$225.50 – $227.00", "Stop_Loss": "$236.00", "Targets": "$248.00", "Probability": "38%", "R_R": "1:1.8"},
@@ -91,13 +87,13 @@ refresh_speed = st.sidebar.slider("Refresh Loop Interval (Seconds)", 5, 60, 15)
 dashboard_container = st.empty()
 
 # ====================================================================
-# 3. LIVE MARKET RUNTIME LOOP
+# 3. LIVE MARKET RUNTIME LOOP + REAL-TIME POSITION STATE ENGINE
 # ====================================================================
 while True:
     working_df = load_clean_scratch_data()
     tickers_list = list(working_df['Ticker'].unique())
     
-    # Live Price Batch Retrieval via yfinance
+    # Live Price Fetch
     live_prices = {}
     if tickers_list:
         try:
@@ -113,8 +109,56 @@ while True:
         except:
             pass
             
-    # Direct Map & Structured Formatting
     working_df['Live Price'] = working_df['Ticker'].map(live_prices).round(2)
+
+    # ----------------------------------------------------------------
+    # AUTOMATED PLAY STATE ANALYZER
+    # ----------------------------------------------------------------
+    def calculate_play_state(row):
+        price = row['Live Price']
+        if pd.isna(price) or price is None:
+            return "🔄 Syncing Market"
+            
+        # Parse numbers out of entry strings (handles "$225.50 - $227.00" or single values "$6.95")
+        entry_nums = [float(n) for n in re.findall(r"[-+]?\d*\.\d+|\d+", str(row['Entry']))]
+        # Parse numbers out of stop loss strings (takes the primary boundary if slashed)
+        stop_nums = [float(n) for n in re.findall(r"[-+]?\d*\.\d+|\d+", str(row['Stop_Loss']))]
+        
+        if not entry_nums or not stop_nums:
+            return "🏳️ Unrated"
+            
+        # Establish structural boundaries
+        entry_floor = min(entry_nums)
+        entry_ceiling = max(entry_nums)
+        stop_boundary = stop_nums[0]
+        
+        # Determine if strategy direction is a standard Long or a Short play
+        is_short_play = "short" in str(row['Scenario']).lower()
+        
+        if is_short_play:
+            if price >= stop_boundary:
+                return "❌ STOPPED OUT (Short)"
+            elif entry_floor <= price <= entry_ceiling:
+                return "🟢 IN ENTRY ZONE"
+            elif price < entry_floor:
+                return "🎯 Running In Profit"
+            else:
+                return "⏳ Monitoring Setup"
+        else:
+            # Standard Long Logic
+            if price <= stop_boundary:
+                return "❌ STOPPED OUT (Long)"
+            elif entry_floor <= price <= entry_ceiling:
+                return "🟢 IN ENTRY ZONE"
+            elif price > entry_ceiling:
+                return "🎯 Running In Profit"
+            else:
+                return "⏳ Monitoring Setup"
+
+    # Enforce state mapping calculations
+    working_df['Play Status'] = working_df.apply(calculate_play_state, axis=1)
+
+    # Re-map clean columns directly
     working_df['Entry Zone'] = working_df['Entry']
     working_df['Stop Loss'] = working_df['Stop_Loss']
     working_df['Targets'] = working_df['Targets']
@@ -129,17 +173,20 @@ while True:
         m1, m2, m3 = st.columns(3)
         m1.metric("Total Active Setups", len(working_df))
         m2.metric("Unique Monitored Assets", working_df['Ticker'].nunique())
-        m3.metric("Stream Pulse Status", "● SCRATCH REBUILD", f"{refresh_speed}s loop")
+        m3.metric("Stream Status", "● RUNNING", f"{refresh_speed}s loop")
         
         st.markdown("### 📋 Active Playbook Run-Time Matrix")
         
-        intended_columns = ['Ticker', 'Scenario', 'Live Price', 'Entry Zone', 'Stop Loss', 'Targets', 'Est. Probability', 'R:R Ratio', 'Chart Link']
+        # Added 'Play Status' right up front next to Scenario so your eyes catch it instantly
+        intended_columns = ['Ticker', 'Scenario', 'Play Status', 'Live Price', 'Entry Zone', 'Stop Loss', 'Targets', 'Est. Probability', 'R:R Ratio', 'Chart Link']
         display_output_df = working_df[intended_columns]
         
         st.dataframe(
             display_output_df,
             column_config={
                 "Live Price": st.column_config.NumberColumn("Live Price", format="$%.2f"),
+                # Adds explicit structural coloring tags to status elements natively
+                "Play Status": st.column_config.TextColumn("🚨 Play Status", width="medium"),
                 "Chart Link": st.column_config.LinkColumn("Chart Link", display_text="TradingView ↗")
             },
             hide_index=True,
