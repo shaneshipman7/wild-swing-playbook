@@ -6,6 +6,7 @@ import pandas as pd
 import yfinance as yf
 import time
 import os
+import re
 
 try:
     from polygon import RESTClient
@@ -17,6 +18,16 @@ DAYS_BACK = 90
 BLOG_RSS = "https://wildswingtrades.blogspot.com/feeds/posts/default?alt=rss"
 # ============================================
 
+def extract_ticker_from_title(title):
+    """Try to find a real ticker in the title, otherwise return MULTI for multi-ticker posts."""
+    # Look for $TICKER, (TICKER), or standalone uppercase words that look like tickers
+    matches = re.findall(r'\$?([A-Z]{1,5})(?:\s|$|\)|\]|,|\.|:)', title)
+    common_words = {'THE', 'AND', 'FOR', 'WITH', 'FROM', 'INTO', 'OVER', 'AFTER', 'BELOW', 'ABOVE', 'BREAK', 'OUT', 'LONG', 'SHORT', 'BUY', 'SELL', 'HOLD', 'WATCH', 'NAMES', 'STOCKS'}
+    for m in matches:
+        if m not in common_words and len(m) >= 2:  # tickers are usually 2+ letters
+            return m
+    return "MULTI"
+
 def fetch_previous_close_prices(tickers):
     print("Fetching previous close prices...")
     prices = {}
@@ -27,7 +38,6 @@ def fetch_previous_close_prices(tickers):
         if ticker == "MULTI":
             continue
         price = None
-        source = ""
 
         # Try Polygon first (more reliable for many tickers)
         if client:
@@ -35,7 +45,6 @@ def fetch_previous_close_prices(tickers):
                 snap = client.get_snapshot("stocks", ticker)
                 if snap and hasattr(snap, 'prev_day') and snap.prev_day and snap.prev_day.c:
                     price = round(snap.prev_day.c, 2)
-                    source = "polygon"
                     print(f"   {ticker}: ${price} (Polygon)")
             except Exception as e:
                 print(f"   Polygon error for {ticker}: {str(e)[:80]}")
@@ -47,7 +56,6 @@ def fetch_previous_close_prices(tickers):
                 hist = stock.history(period="5d")
                 if not hist.empty:
                     price = round(hist['Close'].iloc[-1], 2)
-                    source = "yfinance"
                     print(f"   {ticker}: ${price} (yfinance)")
                 time.sleep(0.8)
             except Exception as e:
@@ -86,13 +94,14 @@ def get_latest_playbook_plays():
                 headers = [cell.get_text(strip=True).lower() for cell in rows[0].find_all(["th", "td"])]
                 
                 if any("scenario" in h for h in headers) and any("entry" in h for h in headers):
+                    ticker = extract_ticker_from_title(title)
                     for row in rows[1:]:
                         cells = [cell.get_text(strip=True) for cell in row.find_all(["td", "th"])]
                         if len(cells) < 5: 
                             continue
                         trade_rows.append({
                             "Date": date_str,
-                            "Ticker": title.split()[0] if title.split() and title.split()[0].isupper() else "MULTI",
+                            "Ticker": ticker,
                             "Post_Title": title,
                             "Scenario": cells[0],
                             "Entry": cells[1],
