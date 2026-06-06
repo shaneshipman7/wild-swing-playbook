@@ -14,11 +14,41 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling for clean metrics and layout
+# CRITICAL: Custom CSS Injector to maximize text contrast in metric cards
 st.markdown("""
     <style>
-        .reportview-container { background: #020617; }
-        .stMetric { background-color: #0f172a; padding: 15px; border-radius: 12px; border: 1px solid #1e293b; }
+        /* Force dark background for the main canvas */
+        .main { background-color: #020617 !important; }
+        
+        /* High-contrast container styles for top metrics */
+        div[data-testid="stMetric"] {
+            background-color: #0f172a !important; 
+            padding: 20px !important; 
+            border-radius: 14px !important; 
+            border: 2px solid #1e293b !important;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        
+        /* Force metric Top Label to be Crisp, Readable Light Grey/White */
+        div[data-testid="stMetricLabel"] > div {
+            color: #f1f5f9 !important;
+            font-size: 1.05rem !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.05em !important;
+            text-transform: uppercase !important;
+        }
+        
+        /* Force metric Big Number Value to be High-Contrast Bright Teal/White */
+        div[data-testid="stMetricValue"] > div {
+            color: #2dd4bf !important;
+            font-size: 2.25rem !important;
+            font-weight: 900 !important;
+        }
+        
+        /* Format Subtext/Delta colors strictly if present */
+        div[data-testid="stMetricDelta"] {
+            font-weight: 700 !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -29,30 +59,29 @@ st.markdown("---")
 # ====================================================================
 # 2. ONLINE LIVE DATA STREAMING & PARSING ENGINE
 # ====================================================================
-@st.cache_data(ttl=30)  # Dynamic 30-second memory threshold to catch online file edits
+@st.cache_data(ttl=30)
 def stream_playbook_from_web():
     """Streams the raw CSV directly from the online GitHub URL into memory."""
-    # Direct raw text server endpoint to bypass GitHub's web interface container
     online_url = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_2026-06-05.csv"
     
     try:
-        # Pull the dataset over a live HTTPS data stream
         df = pd.read_csv(online_url)
         
-        # Clean white space formatting issues and drop metadata placeholders
+        # Strip invisible whitespace characters from headers
+        df.columns = df.columns.str.strip()
+        
         df = df[df['Ticker'].notna()]
         df = df[df['Ticker'] != 'EXPERIMENTAL DATA ONLY']
         df['Ticker'] = df['Ticker'].str.strip().str.upper()
-        df['Scenario'] = df['Scenario'].str.strip()
         
-        # Standardize and sort chronologically by date if the column exists
+        if 'Scenario' in df.columns:
+            df['Scenario'] = df['Scenario'].str.strip()
+        
         if 'Date' in df.columns:
             df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
             df = df.sort_values(by='Date', ascending=False)
         
         # --- CRITICAL DEDUPLICATION MATRIX ---
-        # Group by BOTH Ticker and Scenario so distinct strategies (e.g., Pullback vs Breakout) 
-        # on the exact same ticker stay active, while older duplicates are discarded.
         if 'Scenario' in df.columns:
             df = df.drop_duplicates(subset=['Ticker', 'Scenario'], keep='first')
         else:
@@ -67,17 +96,14 @@ def stream_playbook_from_web():
 # 3. SIDEBAR NAVIGATION & SPEED CONTROLS
 # ====================================================================
 st.sidebar.header("⚙️ Core Processing Settings")
-st.sidebar.markdown("This dashboard updates completely over the web without local server folders.")
 refresh_speed = st.sidebar.slider("Live Market Pricing Loop (Seconds)", min_value=5, max_value=60, value=15)
 
-# Initialize the dynamic view container anchor
 dashboard_anchor = st.empty()
 
 # ====================================================================
 # 4. RUNTIME INFINITE LIVE MARKET LOOP
 # ====================================================================
 while True:
-    # Safely extract fresh parsed structures from the web source
     base_playbook = stream_playbook_from_web()
     
     if base_playbook.empty:
@@ -86,7 +112,6 @@ while True:
         time.sleep(5)
         continue
         
-    # Isolate unique tickers for optimized bulk batch pricing retrieval
     working_df = base_playbook.copy()
     unique_tickers = list(working_df['Ticker'].unique())
     
@@ -94,7 +119,6 @@ while True:
     live_prices = {}
     if unique_tickers:
         try:
-            # Join assets together with spaces to pass a single query to yfinance
             tickers_string = " ".join(unique_tickers)
             data = yf.download(tickers_string, period="1d", interval="1m", group_by='ticker', progress=False)
             
@@ -110,20 +134,35 @@ while True:
             pass
 
     # ====================================================================
-    # 5. DATA ALIGNMENT & EXTRACTION TRANSFORMATIONS
+    # 5. FIXED DATA ALIGNMENT & EXTRACTION MAP
     # ====================================================================
-    # Map raw live numbers back to data rows
-    working_df['Live Price'] = working_df['Ticker'].map(live_prices)
-    working_df['Live Price'] = working_df['Live Price'].apply(lambda x: round(x, 2) if pd.notna(x) else None)
+    working_df['Live Price'] = working_df['Ticker'].map(live_prices).apply(lambda x: round(x, 2) if pd.notna(x) else None)
     
-    # Separate core objectives out cleanly into distinct columns
-    working_df['🔑 Entry Zone'] = working_df['Entry'].fillna('Pending Sync')
-    working_df['🛡️ Stop Loss'] = working_df['Stop_Loss'].fillna('Not Set')
-    working_df['🎯 Target Objectives'] = working_df['Targets'].fillna('Not Set')
+    # Direct Fallback mappings to match columns regardless of spacing
+    working_df['🔑 Entry Zone'] = working_df['Entry'].fillna('Pending Sync') if 'Entry' in working_df.columns else 'N/A'
+    working_df['🛡️ Stop Loss'] = working_df['Stop_Loss'].fillna('Not Set') if 'Stop_Loss' in working_df.columns else 'N/A'
     
-    # --- LOCKED TO TRADINGVIEW TERMINAL LINKS ---
+    # Target Alignment
+    if 'Targets' in working_df.columns:
+        working_df['🎯 Target Objectives'] = working_df['Targets'].fillna('Not Set')
+    elif 'Target' in working_df.columns:
+        working_df['🎯 Target Objectives'] = working_df['Target'].fillna('Not Set')
+    else:
+        working_df['🎯 Target Objectives'] = 'Not Set'
+    
+    # Risk Reward Linkage
+    rr_variants = ['R_R_Ratio', 'R:R Ratio', 'Risk_Reward', 'R:R']
+    found_rr = next((col for col in rr_variants if col in working_df.columns), None)
+    working_df['⚖️ Risk:Reward'] = working_df[found_rr].fillna('N/A') if found_rr else 'N/A'
+        
+    # Probability Isolation (Keeps it distinct from R:R)
+    prob_variants = ['Est_Probability', 'Est_Prob', 'Probability', 'Est. Probability']
+    found_prob = next((col for col in prob_variants if col in working_df.columns), None)
+    working_df['📊 Est. Prob.'] = working_df[found_prob].fillna('N/A') if found_prob else 'N/A'
+    
+    # Direct TradingView Link Builder
     working_df['TradingView Chart'] = working_df['Ticker'].apply(
-        lambda t: f"https://www.tradingview.com/symbols/{t.upper()}/"
+        lambda t: f"https://www.tradingview.com/symbols/{t.upper()}/" if t != 'MULTI' else ""
     )
 
     # ====================================================================
@@ -131,43 +170,39 @@ while True:
     # ====================================================================
     with dashboard_anchor.container():
         
-        # Upper KPI Metrics Grid
         m1, m2, m3 = st.columns(3)
         with m1:
-            st.metric("Total Active Setup Records", len(working_df))
+            st.metric(label="Total Active Setup Records", value=len(working_df))
         with m2:
-            st.metric("Unique Monitored Assets", working_df['Ticker'].nunique())
+            st.metric(label="Unique Monitored Assets", value=working_df['Ticker'].nunique())
         with m3:
-            st.metric("Cloud Stream State", "● ACTIVE", delta=f"{refresh_speed}s interval")
+            st.metric(label="Cloud Stream State", value="● ACTIVE", delta=f"{refresh_speed}s interval")
             
         st.markdown("### 📋 Active Playbook Run-Time Matrix")
         
-        # Designate layout sequence for standard table presentation columns
+        # Enforcing final physical presentation order
         final_column_layout = [
             'Ticker', 'Scenario', 'Live Price', '🔑 Entry Zone', 
-            '🛡️ Stop Loss', '🎯 Target Objectives', 'R_R_Ratio', 'TradingView Chart'
+            '🛡️ Stop Loss', '🎯 Target Objectives', '⚖️ Risk:Reward', '📊 Est. Prob.', 'TradingView Chart'
         ]
         
-        # Safely extract columns verified present inside the data snapshot
         active_cols = [c for c in final_column_layout if c in working_df.columns]
         display_df = working_df[active_cols]
 
-        # Interactive grid viewer rendering with custom column rendering rules
         st.dataframe(
             display_df,
             column_config={
                 "Ticker": st.column_config.TextColumn("Ticker", width="small"),
                 "Scenario": st.column_config.TextColumn("Strategy Scenario", width="large"),
                 "Live Price": st.column_config.NumberColumn("Live Price", format="$%.2f"),
-                "R_R_Ratio": st.column_config.TextColumn("R:R Ratio"),
+                "⚖️ Risk:Reward": st.column_config.TextColumn("R:R Ratio", width="small"),
+                "📊 Est. Prob.": st.column_config.TextColumn("Est. Probability", width="small"),
                 "TradingView Chart": st.column_config.LinkColumn("Chart Link", display_text="TradingView ↗")
             },
             hide_index=True,
             use_container_width=True
         )
         
-        # Lower frame footer metadata tracking tag
         st.caption(f"Last Live System Pulse: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CST")
         
-    # Hold the program thread before automatically restarting the cycle execution layout
     time.sleep(refresh_speed)
