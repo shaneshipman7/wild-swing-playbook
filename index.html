@@ -28,9 +28,22 @@
                     <h1 class="text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-teal-400 to-emerald-400 flex items-center gap-3">
                         📈 Wild Swing Trades
                     </h1>
-                    <p class="text-slate-400 text-lg mt-1 font-semibold">Live Playbook Dashboard <span class="text-xs font-normal text-slate-500">(rolling ~60 days of blog plays)</span></p>
+                    <p class="text-slate-400 text-lg mt-1 font-semibold">Live Playbook Dashboard <span id="timeRangeLabel" class="text-xs font-normal text-slate-500">(rolling last 60 days)</span></p>
                 </div>
-                <div class="flex flex-wrap items-center gap-4">
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- Time Range Selector -->
+                    <div class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-1 py-1">
+                        <span class="text-xs font-bold text-slate-400 pl-2">Look back:</span>
+                        <select id="timeRangeSelect" class="bg-slate-800 text-xs font-bold text-teal-400 border border-slate-700 rounded-lg px-2 py-1 focus:outline-none focus:border-teal-500">
+                            <option value="7">7 days</option>
+                            <option value="14">14 days</option>
+                            <option value="30">30 days</option>
+                            <option value="60" selected>60 days</option>
+                            <option value="90">90 days</option>
+                            <option value="all">All available</option>
+                        </select>
+                    </div>
+
                     <div class="flex items-center gap-3 bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl">
                         <label class="flex items-center gap-2 text-xs font-bold text-slate-300 cursor-pointer">
                             <input type="checkbox" id="showPassed" class="w-4 h-4 accent-emerald-500" checked>
@@ -41,6 +54,7 @@
                             <span>SHOW STOPPED OUT</span>
                         </label>
                     </div>
+                    
                     <button onclick="refreshLivePrices()" id="refreshPricesBtn"
                             class="px-3 py-1.5 text-xs font-bold bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-xl flex items-center gap-1.5 transition-colors">
                         <span>⟳</span>
@@ -90,6 +104,7 @@
         let currentFilteredData = [];
         let sortKey = 'Date';
         let sortAscending = false;
+        let currentDaysBack = 60;
 
         const columnDefinitions = [
             { key: 'Date', label: 'DATE', width: '110px' },
@@ -104,6 +119,16 @@
             { key: 'Est_Probability', label: 'EST. PROB.', width: '110px' },
             { key: 'Pct_Return', label: '% RETURN', width: '120px' }
         ];
+
+        function updateTimeRangeLabel(days) {
+            const label = document.getElementById('timeRangeLabel');
+            if (!label) return;
+            if (days === 'all') {
+                label.textContent = '(all available data)';
+            } else {
+                label.textContent = `(rolling last ${days} days)`;
+            }
+        }
 
         function parseRangeAverage(val) {
             if (!val) return null;
@@ -157,7 +182,7 @@
             return { text: "🏁 PASSED / MONITORING", classes: "bg-slate-900 text-slate-400 border border-slate-800" };
         }
 
-        async function getRecentPlaybookFiles(daysBack = 60) {
+        async function getRecentPlaybookFiles(daysBack) {
             const apiUrl = "https://api.github.com/repos/shaneshipman7/wild-swing-playbook/contents/";
             const response = await fetch(apiUrl);
             if (!response.ok) throw new Error("Could not list repo files");
@@ -165,32 +190,39 @@
             const files = await response.json();
             const now = new Date();
             
-            const csvFiles = files
+            let csvFiles = files
                 .filter(f => f.name.startsWith("Master_Playbook_Database_") && f.name.endsWith(".csv"))
                 .map(f => {
                     const match = f.name.match(/Master_Playbook_Database_(\d{4}-\d{2}-\d{2})\.csv/);
                     return { file: f, dateStr: match ? match[1] : null };
                 })
-                .filter(item => item.dateStr)
-                .map(item => {
-                    const fileDate = new Date(item.dateStr + 'T00:00:00');
-                    const daysDiff = Math.floor((now - fileDate) / (1000 * 60 * 60 * 24));
-                    return { ...item, daysDiff };
-                })
-                .filter(item => item.daysDiff >= 0 && item.daysDiff <= daysBack)
-                .sort((a, b) => b.dateStr.localeCompare(a.dateStr));
+                .filter(item => item.dateStr);
+
+            if (daysBack !== 'all') {
+                csvFiles = csvFiles
+                    .map(item => {
+                        const fileDate = new Date(item.dateStr + 'T00:00:00');
+                        const daysDiff = Math.floor((now - fileDate) / (1000 * 60 * 60 * 24));
+                        return { ...item, daysDiff };
+                    })
+                    .filter(item => item.daysDiff >= 0 && item.daysDiff <= daysBack);
+            }
+
+            csvFiles.sort((a, b) => b.dateStr.localeCompare(a.dateStr));
             
-            if (csvFiles.length === 0) throw new Error("No recent playbook CSV files found");
+            if (csvFiles.length === 0) throw new Error("No playbook CSV files found");
             return csvFiles.map(item => item.file.download_url);
         }
 
-        async function fetchPlaybookCSV() {
+        async function loadPlaybookData(daysBack = 60) {
             const statusEl = document.getElementById('connectionStatus');
             try {
-                statusEl.innerHTML = "⏳ FINDING RECENT DATA (last ~60 days)...";
-                const recentUrls = await getRecentPlaybookFiles(60);
+                const rangeText = daysBack === 'all' ? 'all available' : `last ${daysBack} days`;
+                statusEl.innerHTML = `⏳ LOADING ${rangeText.toUpperCase()}...`;
                 
-                statusEl.innerHTML = `⏳ FETCHING ${recentUrls.length} DAILY FILES...`;
+                const recentUrls = await getRecentPlaybookFiles(daysBack);
+                
+                statusEl.innerHTML = `⏳ FETCHING ${recentUrls.length} FILES...`;
                 
                 const fetchPromises = recentUrls.map(url => 
                     fetch(url + '?t=' + Date.now()).then(r => {
@@ -240,8 +272,11 @@
                     });
                 }
 
+                currentDaysBack = daysBack;
+                updateTimeRangeLabel(daysBack);
+
                 statusEl.className = "px-4 py-2 bg-emerald-950 border border-emerald-500 rounded-xl text-emerald-400 font-bold text-xs";
-                statusEl.innerHTML = `● REPO CONNECTED (${rawPlaybookData.length} plays from last ~60d)`;
+                statusEl.innerHTML = `● REPO CONNECTED (${rawPlaybookData.length} plays)`;
                 executeFilterAndRender();
             } catch (err) {
                 console.error(err);
@@ -260,7 +295,6 @@
                 const result = data?.chart?.result?.[0];
                 if (!result) return null;
                 
-                // Prefer regularMarketPrice (live during market hours), fall back to previousClose
                 const price = result.meta?.regularMarketPrice ?? result.meta?.previousClose;
                 return price ? parseFloat(price) : null;
             } catch (e) {
@@ -277,7 +311,6 @@
             btn.innerHTML = `⟳ Refreshing...`;
             btn.disabled = true;
 
-            // Get unique tickers that currently have no price or we want to refresh
             const tickersToRefresh = [...new Set(
                 rawPlaybookData
                     .filter(r => r.Ticker && r.Ticker !== 'MULTI' && r.Ticker !== 'EXPERIMENTAL DATA ONLY')
@@ -290,7 +323,6 @@
                 return;
             }
 
-            // Batch fetch to be nice to the API
             const batchSize = 8;
             let updatedCount = 0;
 
@@ -303,7 +335,6 @@
                     const freshPrice = prices[idx];
                     if (freshPrice === null) return;
 
-                    // Update all rows for this ticker
                     rawPlaybookData.forEach(row => {
                         if (row.Ticker && row.Ticker.toUpperCase() === ticker) {
                             const oldPrice = row.Current_Price;
@@ -317,7 +348,6 @@
                     });
                 });
 
-                // Small delay between batches
                 if (i + batchSize < tickersToRefresh.length) {
                     await new Promise(r => setTimeout(r, 250));
                 }
@@ -468,9 +498,34 @@
             });
         }
 
+        function setupTimeRangeSelector() {
+            const select = document.getElementById('timeRangeSelect');
+            if (!select) return;
+
+            // Load saved preference
+            const saved = localStorage.getItem('playbookTimeRange');
+            if (saved) {
+                select.value = saved;
+                currentDaysBack = saved === 'all' ? 'all' : parseInt(saved);
+            }
+
+            updateTimeRangeLabel(currentDaysBack);
+
+            select.addEventListener('change', () => {
+                const val = select.value;
+                currentDaysBack = val === 'all' ? 'all' : parseInt(val);
+                localStorage.setItem('playbookTimeRange', val);
+                loadPlaybookData(currentDaysBack);
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             renderTableHeaders();
-            fetchPlaybookCSV();
+            setupTimeRangeSelector();
+            
+            // Initial load with saved or default (60 days)
+            const initialDays = currentDaysBack || 60;
+            loadPlaybookData(initialDays);
 
             document.getElementById('searchInput').addEventListener('input', executeFilterAndRender);
             document.getElementById('showPassed').addEventListener('change', executeFilterAndRender);
