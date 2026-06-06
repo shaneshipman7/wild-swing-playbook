@@ -13,7 +13,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# High-contrast visual overrides 
+# High-contrast visual overrides - Ensures absolute text visibility
 st.markdown("""
     <style>
         .main, [data-testid="stAppViewContainer"] { 
@@ -49,11 +49,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📈 Wild Swing Trades — Playbook Intelligence Hub")
-st.markdown("<p class='disclaimer'>⚠️ Educational & Technical Analysis Only — Not financial advice. Trading involves risk.</p>", unsafe_allow_html=True)
+st.markdown("<p class='disclaimer'>⚠️ Educational & Technical Analysis Only — Not financial advice.</p>", unsafe_allow_html=True)
 st.markdown("---")
 
 # ====================================================================
-# 2. DATA STREAMING ENGINE (WITH EXPLICIT MULTI BAN)
+# 2. DATA STREAMING ENGINE (WITH DYNAMIC SYMBOL FILTERING)
 # ====================================================================
 @st.cache_data(ttl=30)
 def load_playbook_safely():
@@ -62,14 +62,19 @@ def load_playbook_safely():
         df = pd.read_csv(url)
         df.columns = df.columns.str.strip()
         
-        # Clean up empty rows
+        # Drop completely blank rows
         df = df[df['Ticker'].notna()]
-        df['Ticker'] = df['Ticker'].astype(str).str.strip().str.upper()
-        df = df[df['Ticker'] != 'EXPERIMENTAL DATA ONLY']
         
-        # --- THE ULTIMATE BANHAMMER ---
-        # This completely drops 'MULTI' from your data frames forever.
+        # Clean ticker strings (Strip spaces, make upper, strip out junk characters like $)
+        df['Ticker'] = df['Ticker'].astype(str).str.strip().str.upper()
+        df['Ticker'] = df['Ticker'].str.replace('$', '', regex=False)
+        
+        # Hard filters to drop non-tradable rows
+        df = df[df['Ticker'] != 'EXPERIMENTAL DATA ONLY']
         df = df[df['Ticker'] != 'MULTI']
+        
+        # Dynamic regex filter: Keeps ONLY rows that are 1-5 alphabetic characters long
+        df = df[df['Ticker'].str.match(r'^[A-Z]{1,5}$')]
         
         return df
     except Exception as e:
@@ -92,16 +97,14 @@ while True:
     working_df = raw_data.copy()
     tickers_list = list(working_df['Ticker'].unique())
     
-    # Live Price Batch Retrieval (Safe from non-equity tags)
+    # Live Price Batch Retrieval via yfinance
     live_prices = {}
-    valid_market_tickers = [t for t in tickers_list if len(t) <= 5 and t.isalpha()]
-    
-    if valid_market_tickers:
+    if tickers_list:
         try:
-            market_data = yf.download(" ".join(valid_market_tickers), period="1d", interval="1m", group_by='ticker', progress=False)
-            for ticker in valid_market_tickers:
+            market_data = yf.download(" ".join(tickers_list), period="1d", interval="1m", group_by='ticker', progress=False)
+            for ticker in tickers_list:
                 try:
-                    if len(valid_market_tickers) == 1:
+                    if len(tickers_list) == 1:
                         live_prices[ticker] = market_data['Close'].iloc[-1]
                     else:
                         live_prices[ticker] = market_data[ticker]['Close'].iloc[-1]
@@ -110,13 +113,13 @@ while True:
         except:
             pass
             
-    # Direct Map & Structural Fallbacks
+    # Data Formatting Alignment
     working_df['Live Price'] = working_df['Ticker'].map(live_prices).round(2)
     working_df['Entry Zone'] = working_df['Entry'].fillna('Pending')
     working_df['Stop Loss'] = working_df['Stop_Loss'].fillna('Not Set')
     working_df['Targets'] = working_df['Targets'].fillna('Not Set')
     
-    # Store raw metrics before layout swap correction
+    # Isolate raw metrics columns to fix swapped spreadsheet data layouts
     working_df['Raw_RR_Col'] = working_df['R_R_Ratio'].fillna('N/A')
     working_df['Raw_Prob_Col'] = working_df['Est_Probability'].fillna('N/A')
     
@@ -133,7 +136,7 @@ while True:
         
         st.markdown("### 📋 Active Playbook Run-Time Matrix")
         
-        # Grid layout structure sequence
+        # Establish identical table layout sequence as image_ca57c3.png
         intended_columns = ['Ticker', 'Scenario', 'Live Price', 'Entry Zone', 'Stop Loss', 'Targets', 'Raw_RR_Col', 'Raw_Prob_Col', 'Chart Link']
         display_output_df = working_df[intended_columns]
         
@@ -141,7 +144,7 @@ while True:
             display_output_df,
             column_config={
                 "Live Price": st.column_config.NumberColumn("Live Price", format="$%.2f"),
-                # Re-aligning the layout names so data matches the columns perfectly on screen
+                # FORCE MAP CORRECTION: Aligns headers flawlessly based on your exact CSV layout values
                 "Raw_RR_Col": st.column_config.TextColumn("Est. Probability", width="small"),
                 "Raw_Prob_Col": st.column_config.TextColumn("R:R Ratio", width="small"),
                 "Chart Link": st.column_config.LinkColumn("Chart Link", display_text="TradingView ↗")
