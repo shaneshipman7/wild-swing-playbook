@@ -41,12 +41,25 @@
                             <span>SHOW STOPPED OUT</span>
                         </label>
                     </div>
+                    <button onclick="refreshLivePrices()" id="refreshPricesBtn"
+                            class="px-3 py-1.5 text-xs font-bold bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-xl flex items-center gap-1.5 transition-colors">
+                        <span>⟳</span>
+                        <span>Refresh Live Prices</span>
+                    </button>
                     <div id="connectionStatus" class="px-4 py-2 bg-amber-950/60 border border-amber-500 rounded-xl text-amber-400 font-bold flex items-center gap-2 text-xs animate-pulse">
                         ⏳ LOADING LATEST DATA...
                     </div>
                 </div>
             </div>
         </header>
+
+        <!-- CYA Disclaimer -->
+        <div class="flex-shrink-0 mb-3 px-4 py-2.5 text-[10px] leading-tight text-slate-400 bg-slate-900/70 border border-slate-800 rounded-2xl">
+            ⚠️ <strong>Educational & Technical Analysis Only</strong> — Not financial, investment, or trading advice. 
+            All data is experimental and for illustrative purposes. Trading involves substantial risk of loss. 
+            Past performance is not indicative of future results. Always conduct your own independent research and consult qualified professionals. 
+            Data sourced from public blog posts + market APIs.
+        </div>
 
         <div class="flex-shrink-0 flex flex-col sm:flex-row gap-4 mb-4 items-stretch sm:items-center justify-between">
             <div class="relative flex-1 max-w-md">
@@ -155,7 +168,6 @@
             const csvFiles = files
                 .filter(f => f.name.startsWith("Master_Playbook_Database_") && f.name.endsWith(".csv"))
                 .map(f => {
-                    // Extract date from filename like Master_Playbook_Database_2026-06-05.csv
                     const match = f.name.match(/Master_Playbook_Database_(\d{4}-\d{2}-\d{2})\.csv/);
                     return { file: f, dateStr: match ? match[1] : null };
                 })
@@ -166,10 +178,9 @@
                     return { ...item, daysDiff };
                 })
                 .filter(item => item.daysDiff >= 0 && item.daysDiff <= daysBack)
-                .sort((a, b) => b.dateStr.localeCompare(a.dateStr)); // newest first
+                .sort((a, b) => b.dateStr.localeCompare(a.dateStr));
             
             if (csvFiles.length === 0) throw new Error("No recent playbook CSV files found");
-            
             return csvFiles.map(item => item.file.download_url);
         }
 
@@ -181,7 +192,6 @@
                 
                 statusEl.innerHTML = `⏳ FETCHING ${recentUrls.length} DAILY FILES...`;
                 
-                // Fetch all recent CSVs in parallel
                 const fetchPromises = recentUrls.map(url => 
                     fetch(url + '?t=' + Date.now()).then(r => {
                         if (!r.ok) throw new Error(`Failed to fetch ${url}`);
@@ -192,7 +202,7 @@
                 const texts = await Promise.all(fetchPromises);
                 
                 let allRows = [];
-                const seenPlays = new Set(); // dedup by Link + Scenario to avoid overlap across daily snapshots
+                const seenPlays = new Set();
                 
                 for (const loadedText of texts) {
                     Papa.parse(loadedText, {
@@ -201,18 +211,15 @@
                         complete: function(results) {
                             for (const row of results.data) {
                                 if (!row.Ticker || row.Ticker === 'EXPERIMENTAL DATA ONLY') continue;
-                                
                                 const playKey = `${row.Link || ''}|${row.Scenario || ''}`;
                                 if (seenPlays.has(playKey)) continue;
                                 seenPlays.add(playKey);
-                                
                                 allRows.push(row);
                             }
                         }
                     });
                 }
 
-                // Sort combined data by Date descending (newest first)
                 allRows.sort((a, b) => (b.Date || '').localeCompare(a.Date || ''));
 
                 rawPlaybookData = [];
@@ -241,6 +248,90 @@
                 statusEl.className = "px-4 py-2 bg-red-950 border border-red-500 rounded-xl text-red-400 font-bold text-xs";
                 statusEl.innerHTML = "❌ COULD NOT LOAD DATA";
             }
+        }
+
+        // Fetch fresh live price for a single ticker using public Yahoo endpoint
+        async function fetchYahooPrice(ticker) {
+            try {
+                const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
+                const res = await fetch(url);
+                if (!res.ok) return null;
+                const data = await res.json();
+                const result = data?.chart?.result?.[0];
+                if (!result) return null;
+                
+                // Prefer regularMarketPrice (live during market hours), fall back to previousClose
+                const price = result.meta?.regularMarketPrice ?? result.meta?.previousClose;
+                return price ? parseFloat(price) : null;
+            } catch (e) {
+                console.warn(`Price fetch failed for ${ticker}:`, e);
+                return null;
+            }
+        }
+
+        async function refreshLivePrices() {
+            const btn = document.getElementById('refreshPricesBtn');
+            if (!btn || rawPlaybookData.length === 0) return;
+
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `⟳ Refreshing...`;
+            btn.disabled = true;
+
+            // Get unique tickers that currently have no price or we want to refresh
+            const tickersToRefresh = [...new Set(
+                rawPlaybookData
+                    .filter(r => r.Ticker && r.Ticker !== 'MULTI' && r.Ticker !== 'EXPERIMENTAL DATA ONLY')
+                    .map(r => r.Ticker.toUpperCase())
+            )];
+
+            if (tickersToRefresh.length === 0) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                return;
+            }
+
+            // Batch fetch to be nice to the API
+            const batchSize = 8;
+            let updatedCount = 0;
+
+            for (let i = 0; i < tickersToRefresh.length; i += batchSize) {
+                const batch = tickersToRefresh.slice(i, i + batchSize);
+                const pricePromises = batch.map(t => fetchYahooPrice(t));
+                const prices = await Promise.all(pricePromises);
+
+                batch.forEach((ticker, idx) => {
+                    const freshPrice = prices[idx];
+                    if (freshPrice === null) return;
+
+                    // Update all rows for this ticker
+                    rawPlaybookData.forEach(row => {
+                        if (row.Ticker && row.Ticker.toUpperCase() === ticker) {
+                            const oldPrice = row.Current_Price;
+                            row.Current_Price = freshPrice;
+                            row.Pct_Return = calculatePctReturn(row, freshPrice);
+                            const statusInfo = evaluatePlayStatus(row, freshPrice);
+                            row._statusText = statusInfo.text;
+                            row._statusClasses = statusInfo.classes;
+                            if (oldPrice !== freshPrice) updatedCount++;
+                        }
+                    });
+                });
+
+                // Small delay between batches
+                if (i + batchSize < tickersToRefresh.length) {
+                    await new Promise(r => setTimeout(r, 250));
+                }
+            }
+
+            executeFilterAndRender();
+
+            btn.innerHTML = `✓ Refreshed ${updatedCount} prices`;
+            setTimeout(() => {
+                if (btn) {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            }, 2200);
         }
 
         function executeFilterAndRender() {
