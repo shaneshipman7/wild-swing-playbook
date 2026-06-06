@@ -152,7 +152,6 @@ def enrich_with_live_prices(df):
     df['Live Price'] = df['Ticker'].map(live_prices)
     return df
 
-# Load data FIRST (before any UI that depends on it)
 lookback_days_default = 30
 raw_plays = get_raw_playbook(lookback_days_default)
 working_df = pd.DataFrame(raw_plays)
@@ -160,7 +159,6 @@ for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Los
     if col not in working_df.columns: working_df[col] = ""
 working_df = enrich_with_live_prices(working_df)
 working_df = compute_matrix_metrics(working_df)
-working_df['Chart Link'] = working_df['Ticker'].apply(lambda t: f"https://www.tradingview.com/symbols/{str(t).upper()}/")
 
 if HAS_AUTOREFRESH:
     st_autorefresh(interval=25 * 1000, limit=200, key="price_autorefresh")
@@ -170,9 +168,8 @@ with st.sidebar:
     lookback_days = st.slider("Look back (days) from blog", 7, 90, lookback_days_default, 1, help="How far back to pull plays from your blog posts.")
     
     st.subheader("Filters")
-    # Safe dynamic status options (data already loaded above)
     status_options = sorted(working_df['Play Status'].dropna().unique().tolist())
-    selected_statuses = st.multiselect("Play Status", options=status_options, default=status_options, help="Uncheck any status to filter it out (e.g. uncheck IN ENTRY ZONE)")
+    selected_statuses = st.multiselect("Play Status", options=status_options, default=status_options, help="Uncheck statuses to filter them out")
     ticker_filter = st.text_input("Ticker contains", "", help="Partial ticker match")
     
     if st.button("🔄 Force Full Refresh (Blog + Prices)", use_container_width=True):
@@ -183,7 +180,6 @@ with st.sidebar:
     st.divider()
     st.caption("Blog data refreshes every ~30 min. Live prices ~every 25s.")
 
-# Re-load if lookback changed (cheap because of cache)
 if lookback_days != lookback_days_default:
     raw_plays = get_raw_playbook(lookback_days)
     working_df = pd.DataFrame(raw_plays)
@@ -191,9 +187,7 @@ if lookback_days != lookback_days_default:
         if col not in working_df.columns: working_df[col] = ""
     working_df = enrich_with_live_prices(working_df)
     working_df = compute_matrix_metrics(working_df)
-    working_df['Chart Link'] = working_df['Ticker'].apply(lambda t: f"https://www.tradingview.com/symbols/{str(t).upper()}/")
 
-# Apply filters
 filtered_df = working_df.copy()
 if selected_statuses:
     filtered_df = filtered_df[filtered_df['Play Status'].isin(selected_statuses)]
@@ -207,13 +201,16 @@ m3.metric("Data Window", f"Last {lookback_days} days from blog")
 m4.metric("Last Updated", datetime.now().strftime("%H:%M:%S"))
 
 st.markdown("### 📋 Active Playbook — Live from Your Wild Swing Trades Blog")
-st.caption("Sidebar filters let you include/exclude any status (including IN ENTRY ZONE). Status list is now complete and dynamic.")
+st.caption("Click any **Ticker** to open its TradingView chart directly. No need to scroll for links.")
 
-ordered_cols = ['Ticker', 'Scenario', 'Play Status', 'Live Price', 'Entry', 'Stop_Loss', 'Targets', 'Est. Return', 'R:R Ratio', 'Pub Date', 'Blog Link', 'Chart Link']
+# Make Ticker clickable to TradingView (removes need for separate Chart Link column)
+filtered_df['TickerLink'] = filtered_df['Ticker'].apply(lambda t: f"https://www.tradingview.com/symbols/{str(t).upper()}/")
+
+ordered_cols = ['TickerLink', 'Scenario', 'Play Status', 'Live Price', 'Entry', 'Stop_Loss', 'Targets', 'Est. Return', 'R:R Ratio', 'Pub Date', 'Blog Link']
 display_df = filtered_df[[c for c in ordered_cols if c in filtered_df.columns]]
 
 st.dataframe(display_df, column_config={
-    "Ticker": st.column_config.TextColumn("Ticker", width="small"),
+    "TickerLink": st.column_config.LinkColumn("Ticker", display_text=lambda x: x.split('/')[-2] if '/' in str(x) else str(x), width="small"),
     "Scenario": st.column_config.TextColumn("Scenario", width="large"),
     "Play Status": st.column_config.TextColumn("Status", width="medium"),
     "Live Price": st.column_config.NumberColumn("Live Price", format="$%.2f", width="small"),
@@ -223,15 +220,14 @@ st.dataframe(display_df, column_config={
     "Est. Return": st.column_config.TextColumn("Est. Return", width="small"),
     "R:R Ratio": st.column_config.TextColumn("R:R", width="small"),
     "Pub Date": st.column_config.TextColumn("Blog Date", width="small"),
-    "Blog Link": st.column_config.LinkColumn("Blog Post", display_text="Read Full Analysis ↗", width="medium"),
-    "Chart Link": st.column_config.LinkColumn("Chart", display_text="TradingView ↗", width="small")
+    "Blog Link": st.column_config.LinkColumn("Blog Post", display_text="Read Analysis ↗", width="medium")
 }, hide_index=True, use_container_width=True, height=420)
 
 with st.expander("💡 Filter tips"):
     st.markdown("""
-    - Use the **Play Status** multiselect to show/hide specific statuses (e.g. hide all IN ENTRY ZONE).
-    - The dropdown now contains **every status** present in your data.
-    - Combine with lookback slider + ticker search for precise control.
+    - Click the **Ticker** name itself to jump straight to the TradingView chart.
+    - No need to scroll horizontally for links anymore.
+    - Use sidebar filters + lookback slider for precise control.
     """)
 
-st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3.4 (stable filters) • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
+st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3.5 (clickable Ticker) • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
