@@ -40,10 +40,6 @@
                             <input type="checkbox" id="showStopOut" class="w-4 h-4 accent-red-500" checked>
                             <span>SHOW STOPPED OUT</span>
                         </label>
-                        <label class="flex items-center gap-2 text-xs font-bold text-amber-300 cursor-pointer">
-                            <input type="checkbox" id="showMulti" class="w-4 h-4 accent-amber-500">
-                            <span>SHOW MULTI</span>
-                        </label>
                     </div>
                     <div id="connectionStatus" class="px-4 py-2 bg-amber-950/60 border border-amber-500 rounded-xl text-amber-400 font-bold flex items-center gap-2 text-xs animate-pulse">
                         ⏳ LOADING LATEST DATA...
@@ -149,7 +145,6 @@
         }
 
         async function getLatestPlaybookFile() {
-            // Dynamically find the most recent Master_Playbook_Database_*.csv
             const apiUrl = "https://api.github.com/repos/shaneshipman7/wild-swing-playbook/contents/";
             const response = await fetch(apiUrl);
             if (!response.ok) throw new Error("Could not list repo files");
@@ -157,11 +152,10 @@
             const files = await response.json();
             const csvFiles = files
                 .filter(f => f.name.startsWith("Master_Playbook_Database_") && f.name.endsWith(".csv"))
-                .sort((a, b) => b.name.localeCompare(a.name)); // newest first (YYYY-MM-DD sorts correctly)
+                .sort((a, b) => b.name.localeCompare(a.name));
             
             if (csvFiles.length === 0) throw new Error("No playbook CSV files found");
-            
-            return csvFiles[0].download_url; // raw URL of the newest file
+            return csvFiles[0].download_url;
         }
 
         async function fetchPlaybookCSV() {
@@ -180,7 +174,20 @@
                     header: true,
                     skipEmptyLines: true,
                     complete: function(results) {
-                        rawPlaybookData = results.data.map(row => {
+                        // Deduplicate: keep only the most recent play per ticker
+                        const latestByTicker = new Map();
+                        
+                        results.data.forEach(row => {
+                            const ticker = row.Ticker;
+                            if (!ticker || ticker === 'EXPERIMENTAL DATA ONLY') return;
+                            
+                            const existing = latestByTicker.get(ticker);
+                            if (!existing || row.Date > existing.Date) {
+                                latestByTicker.set(ticker, row);
+                            }
+                        });
+                        
+                        rawPlaybookData = Array.from(latestByTicker.values()).map(row => {
                             let price = parseFloat(row.Current_Price);
                             if (isNaN(price)) price = null;
                             
@@ -212,12 +219,10 @@
             const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
             const showPassed = document.getElementById('showPassed').checked;
             const showStopOut = document.getElementById('showStopOut').checked;
-            const showMulti = document.getElementById('showMulti').checked;
 
             currentFilteredData = rawPlaybookData.filter(row => {
                 if (!showPassed && row._statusText.includes("PASSED")) return false;
                 if (!showStopOut && row._statusText.includes("STOPPED OUT")) return false;
-                if (!showMulti && row.Ticker === 'MULTI') return false;
 
                 if (searchTerm) {
                     return (
@@ -351,7 +356,6 @@
             document.getElementById('searchInput').addEventListener('input', executeFilterAndRender);
             document.getElementById('showPassed').addEventListener('change', executeFilterAndRender);
             document.getElementById('showStopOut').addEventListener('change', executeFilterAndRender);
-            document.getElementById('showMulti').addEventListener('change', executeFilterAndRender);
         });
     </script>
 </body>
