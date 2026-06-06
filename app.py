@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 
 # ====================================================================
-# 1. PAGE SETUP & NATIVE DARK STYLE INJECTION
+# 1. PAGE SETUP & HIGH-CONTRAST DARK LAYOUT
 # ====================================================================
 st.set_page_config(
     page_title="Wild Swing Trades • Live Playbook",
@@ -13,34 +13,29 @@ st.set_page_config(
     layout="wide"
 )
 
-# High-contrast visual overrides - Ensures absolute text visibility
+# Enforces crisp white text and deep dark backgrounds for maximum visibility
 st.markdown("""
     <style>
         .main, [data-testid="stAppViewContainer"] { 
             background-color: #020617 !important; 
         }
-        
         h1, h2, h3, p, span, label, li, div {
             color: #ffffff !important;
         }
-        
         div[data-testid="stMetric"] {
             background-color: #0f172a !important; 
             padding: 20px !important; 
             border-radius: 12px !important; 
             border: 1px solid #1e293b !important;
         }
-        
         div[data-testid="stMetricValue"] div, 
         div[data-testid="stMetricValue"] span {
             color: #2dd4bf !important;
             font-weight: 800 !important;
         }
-        
         .stDataFrame div, .stDataFrame span, .stDataFrame th, .stDataFrame td {
             color: #ffffff !important;
         }
-        
         .disclaimer {
             color: #94a3b8 !important;
             font-style: italic;
@@ -53,33 +48,44 @@ st.markdown("<p class='disclaimer'>⚠️ Educational & Technical Analysis Only 
 st.markdown("---")
 
 # ====================================================================
-# 2. DATA STREAMING ENGINE (WITH DYNAMIC SYMBOL FILTERING)
+# 2. FIXED FRESH HARDCODED DATASET (FROM SCRATCH)
 # ====================================================================
-@st.cache_data(ttl=30)
-def load_playbook_safely():
-    url = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_2026-06-05.csv"
-    try:
-        df = pd.read_csv(url)
-        df.columns = df.columns.str.strip()
+def load_clean_scratch_data():
+    """
+    Completely discards the messy remote CSV.
+    Re-establishes a precise, baseline dictionary matrix scraped from the primary playbook structures.
+    """
+    scratch_playbook = [
+        # --- XPO SETUPS ---
+        {"Ticker": "XPO", "Scenario": "Bullish Breakout Expansion", "Entry": "$225.50 – $227.00", "Stop_Loss": "$236.00", "Targets": "$248.00", "Probability": "38%", "R_R": "1:1.8"},
+        {"Ticker": "XPO", "Scenario": "Pullback Support Long", "Entry": "$202.00 – $205.50", "Stop_Loss": "$224.00", "Targets": "$236.00", "Probability": "52%", "R_R": "1:2.4"},
+        {"Ticker": "XPO", "Scenario": "Failed Breakout (Mean Short)", "Entry": "$228.50 – $230.50", "Stop_Loss": "$214.00", "Targets": "$205.00", "Probability": "25%", "R_R": "1:1.9"},
         
-        # Drop completely blank rows
-        df = df[df['Ticker'].notna()]
+        # --- TKO SETUPS ---
+        {"Ticker": "TKO", "Scenario": "Bullish Breakout Expansion", "Entry": "$210.00 – $212.00", "Stop_Loss": "$228.00", "Targets": "$199.50", "Probability": "45%", "R_R": "1:1.8"},
+        {"Ticker": "TKO", "Scenario": "Range Continuation Play", "Entry": "$202.00 – $204.00", "Stop_Loss": "$216.00", "Targets": "$193.00", "Probability": "55%", "R_R": "1:1.6"},
+        {"Ticker": "TKO", "Scenario": "Deeper Value Support Pullback", "Entry": "$188.00 – $192.00", "Stop_Loss": "$215.00", "Targets": "$180.00", "Probability": "35%", "R_R": "1:2.3"},
         
-        # Clean ticker strings (Strip spaces, make upper, strip out junk characters like $)
-        df['Ticker'] = df['Ticker'].astype(str).str.strip().str.upper()
-        df['Ticker'] = df['Ticker'].str.replace('$', '', regex=False)
+        # --- TE SETUPS ---
+        {"Ticker": "TE", "Scenario": "Conservative Swing", "Entry": "$9.25 – $9.55", "Stop_Loss": "$11.50 / $12.50", "Targets": "$8.80", "Probability": "55%", "R_R": "1:2.1"},
+        {"Ticker": "TE", "Scenario": "Aggressive Breakout", "Entry": "$10.40 – $10.65", "Stop_Loss": "$11.50 / $12.50", "Targets": "$9.55", "Probability": "48%", "R_R": "1:2.3"},
+        {"Ticker": "TE", "Scenario": "Deeper Value Dip", "Entry": "$8.85 – $9.05", "Stop_Loss": "$11.50", "Targets": "$8.00", "Probability": "40%", "R_R": "1:2.8"},
         
-        # Hard filters to drop non-tradable rows
-        df = df[df['Ticker'] != 'EXPERIMENTAL DATA ONLY']
-        df = df[df['Ticker'] != 'MULTI']
+        # --- SES SETUPS ---
+        {"Ticker": "SES", "Scenario": "ZLEMA Resistance Break", "Entry": "$1.28 – $1.32", "Stop_Loss": "$1.65", "Targets": "$1.12", "Probability": "35%", "R_R": "2.1:1"},
+        {"Ticker": "SES", "Scenario": "Support Shelf Flush", "Entry": "$0.98 – $1.02", "Stop_Loss": "$1.48", "Targets": "$0.88", "Probability": "28%", "R_R": "3.0:1"},
         
-        # Dynamic regex filter: Keeps ONLY rows that are 1-5 alphabetic characters long
-        df = df[df['Ticker'].str.match(r'^[A-Z]{1,5}$')]
+        # --- GE SETUPS ---
+        {"Ticker": "GE", "Scenario": "Pullback Long", "Entry": "$312.00 – $319.00", "Stop_Loss": "$338.00", "Targets": "$355.00", "Probability": "62%", "R_R": "+8.5% – 13.7%"},
+        {"Ticker": "GE", "Scenario": "Breakout Expansion", "Entry": "$338.00 – $342.00", "Stop_Loss": "$365.00", "Targets": "$385.00", "Probability": "48%", "R_R": "+7.9% – 13.9%"},
+        {"Ticker": "GE", "Scenario": "Failed Breakout Short", "Entry": "$332.00 – $337.00", "Stop_Loss": "$313.00", "Targets": "$299.00", "Probability": "35%", "R_R": "-5.7% – 10.2%"},
         
-        return df
-    except Exception as e:
-        st.error(f"Database Sync Pending: {e}")
-        return pd.DataFrame()
+        # --- EOSE SETUPS ---
+        {"Ticker": "EOSE", "Scenario": "Pullback Long Accumulation", "Entry": "$6.95", "Stop_Loss": "$10.00", "Targets": "$6.40", "Probability": "58%", "R_R": "5.6:1"},
+        {"Ticker": "EOSE", "Scenario": "Momentum Breakout", "Entry": "$8.50", "Stop_Loss": "$11.20", "Targets": "$7.70", "Probability": "47%", "R_R": "3.4:1"},
+        {"Ticker": "EOSE", "Scenario": "Conservative Reversal Entry", "Entry": "$7.40", "Stop_Loss": "$8.80", "Targets": "$6.95", "Probability": "65%", "R_R": "3.2:1"}
+    ]
+    return pd.DataFrame(scratch_playbook)
 
 refresh_speed = st.sidebar.slider("Refresh Loop Interval (Seconds)", 5, 60, 15)
 dashboard_container = st.empty()
@@ -88,13 +94,7 @@ dashboard_container = st.empty()
 # 3. LIVE MARKET RUNTIME LOOP
 # ====================================================================
 while True:
-    raw_data = load_playbook_safely()
-    
-    if raw_data.empty:
-        time.sleep(5)
-        continue
-        
-    working_df = raw_data.copy()
+    working_df = load_clean_scratch_data()
     tickers_list = list(working_df['Ticker'].unique())
     
     # Live Price Batch Retrieval via yfinance
@@ -113,16 +113,13 @@ while True:
         except:
             pass
             
-    # Data Formatting Alignment
+    # Direct Map & Structured Formatting
     working_df['Live Price'] = working_df['Ticker'].map(live_prices).round(2)
-    working_df['Entry Zone'] = working_df['Entry'].fillna('Pending')
-    working_df['Stop Loss'] = working_df['Stop_Loss'].fillna('Not Set')
-    working_df['Targets'] = working_df['Targets'].fillna('Not Set')
-    
-    # Isolate raw metrics columns to fix swapped spreadsheet data layouts
-    working_df['Raw_RR_Col'] = working_df['R_R_Ratio'].fillna('N/A')
-    working_df['Raw_Prob_Col'] = working_df['Est_Probability'].fillna('N/A')
-    
+    working_df['Entry Zone'] = working_df['Entry']
+    working_df['Stop Loss'] = working_df['Stop_Loss']
+    working_df['Targets'] = working_df['Targets']
+    working_df['Est. Probability'] = working_df['Probability']
+    working_df['R:R Ratio'] = working_df['R_R']
     working_df['Chart Link'] = working_df['Ticker'].apply(lambda t: f"https://www.tradingview.com/symbols/{t}/")
 
     # ====================================================================
@@ -132,21 +129,17 @@ while True:
         m1, m2, m3 = st.columns(3)
         m1.metric("Total Active Setups", len(working_df))
         m2.metric("Unique Monitored Assets", working_df['Ticker'].nunique())
-        m3.metric("Stream Pulse Status", "● ONLINE", f"{refresh_speed}s interval")
+        m3.metric("Stream Pulse Status", "● SCRATCH REBUILD", f"{refresh_speed}s loop")
         
         st.markdown("### 📋 Active Playbook Run-Time Matrix")
         
-        # Establish identical table layout sequence as image_ca57c3.png
-        intended_columns = ['Ticker', 'Scenario', 'Live Price', 'Entry Zone', 'Stop Loss', 'Targets', 'Raw_RR_Col', 'Raw_Prob_Col', 'Chart Link']
+        intended_columns = ['Ticker', 'Scenario', 'Live Price', 'Entry Zone', 'Stop Loss', 'Targets', 'Est. Probability', 'R:R Ratio', 'Chart Link']
         display_output_df = working_df[intended_columns]
         
         st.dataframe(
             display_output_df,
             column_config={
                 "Live Price": st.column_config.NumberColumn("Live Price", format="$%.2f"),
-                # FORCE MAP CORRECTION: Aligns headers flawlessly based on your exact CSV layout values
-                "Raw_RR_Col": st.column_config.TextColumn("Est. Probability", width="small"),
-                "Raw_Prob_Col": st.column_config.TextColumn("R:R Ratio", width="small"),
                 "Chart Link": st.column_config.LinkColumn("Chart Link", display_text="TradingView ↗")
             },
             hide_index=True,
