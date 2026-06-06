@@ -160,9 +160,10 @@ with st.sidebar:
     lookback_days = st.slider("Look back (days) from blog", 7, 90, 30, 1, help="How far back to pull plays from your blog posts.")
     
     st.subheader("Filters")
-    status_options = ["🟢 IN ENTRY ZONE", "🟢 Momentum / Breakout Setup", "⏳ Monitoring Setup", "🆕 Fresh • ⏳ Monitoring Setup", "🆕 Fresh • 🟢 Momentum / Breakout Setup"]
-    selected_statuses = st.multiselect("Play Status", options=status_options, default=status_options, help="Filter by status (e.g. only show IN ENTRY ZONE setups)")
-    ticker_filter = st.text_input("Ticker contains", "", help="Filter by ticker symbol (partial match)")
+    # Dynamic status options so we always have every status that exists in the data
+    status_options = sorted(working_df['Play Status'].dropna().unique().tolist()) if 'working_df' in dir() else ["🟢 IN ENTRY ZONE", "🟢 Momentum / Breakout Setup", "⏳ Monitoring Setup"]
+    selected_statuses = st.multiselect("Play Status (select to filter)", options=status_options, default=status_options, help="Select which statuses to show. Uncheck any you want to hide (e.g. uncheck IN ENTRY ZONE to filter them out).")
+    ticker_filter = st.text_input("Ticker contains", "", help="Partial ticker match (e.g. type XPO or UMAC)")
     
     if st.button("🔄 Force Full Refresh (Blog + Prices)", use_container_width=True):
         st.cache_data.clear()
@@ -194,7 +195,7 @@ m3.metric("Data Window", f"Last {lookback_days} days from blog")
 m4.metric("Last Updated", datetime.now().strftime("%H:%M:%S"))
 
 st.markdown("### 📋 Active Playbook — Live from Your Wild Swing Trades Blog")
-st.caption("Use the sidebar filters to quickly find IN ENTRY ZONE or Momentum setups. Sort columns for best Est. Return / R:R.")
+st.caption("Use sidebar filters to focus on IN ENTRY ZONE, Momentum, or specific tickers. The status dropdown now shows every status present in your data.")
 
 ordered_cols = ['Ticker', 'Scenario', 'Play Status', 'Live Price', 'Entry', 'Stop_Loss', 'Targets', 'Est. Return', 'R:R Ratio', 'Pub Date', 'Blog Link', 'Chart Link']
 display_df = filtered_df[[c for c in ordered_cols if c in filtered_df.columns]]
@@ -214,11 +215,12 @@ st.dataframe(display_df, column_config={
     "Chart Link": st.column_config.LinkColumn("Chart", display_text="TradingView ↗", width="small")
 }, hide_index=True, use_container_width=True, height=420)
 
-with st.expander("💡 Spotting the really good deals"):
+with st.expander("💡 How to use the filters"):
     st.markdown("""
-    - Use the **Play Status** multiselect in the sidebar to show only **IN ENTRY ZONE** or **Momentum** setups.
-    - Combine with **Ticker contains** for quick symbol filtering.
-    - Sort the table by **Est. Return** or **R:R Ratio** to surface the strongest opportunities.
+    - **Play Status dropdown**: Select/unselect any statuses. To hide all "IN ENTRY ZONE" plays, simply uncheck that option.
+    - The list now includes **every status** that exists in your current data (no more missing ones).
+    - Use **Ticker contains** for quick symbol search.
+    - Combine with the lookback slider for powerful control.
     """)
 
-st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3.2 (status + ticker filters) • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
+st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3.3 (dynamic status filter) • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
