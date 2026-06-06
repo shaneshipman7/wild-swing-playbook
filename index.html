@@ -174,34 +174,29 @@
                     header: true,
                     skipEmptyLines: true,
                     complete: function(results) {
-                        // Sort by Date descending first (newest first)
+                        // Use ALL rows from the latest daily CSV (includes all scenarios and MULTI posts from blog)
+                        // Previously deduped by ticker which hid most MULTI-ticker plays and extra scenarios
                         const sorted = [...results.data].sort((a, b) => (b.Date || '').localeCompare(a.Date || ''));
                         
-                        // Deduplicate: keep only the most recent play per ticker (including MULTI)
-                        const seen = new Set();
                         rawPlaybookData = [];
                         
                         for (const row of sorted) {
                             const ticker = row.Ticker;
                             if (!ticker || ticker === 'EXPERIMENTAL DATA ONLY') continue;
                             
-                            if (!seen.has(ticker)) {
-                                seen.add(ticker);
-                                
-                                let price = parseFloat(row.Current_Price);
-                                if (isNaN(price)) price = null;
-                                
-                                let calculatedReturn = calculatePctReturn(row, price);
-                                let statusInfo = evaluatePlayStatus(row, price);
+                            let price = parseFloat(row.Current_Price);
+                            if (isNaN(price)) price = null;
+                            
+                            let calculatedReturn = calculatePctReturn(row, price);
+                            let statusInfo = evaluatePlayStatus(row, price);
 
-                                rawPlaybookData.push({
-                                    ...row,
-                                    Current_Price: price,
-                                    Pct_Return: calculatedReturn,
-                                    _statusText: statusInfo.text,
-                                    _statusClasses: statusInfo.classes
-                                });
-                            }
+                            rawPlaybookData.push({
+                                ...row,
+                                Current_Price: price,
+                                Pct_Return: calculatedReturn,
+                                _statusText: statusInfo.text,
+                                _statusClasses: statusInfo.classes
+                            });
                         }
 
                         statusEl.className = "px-4 py-2 bg-emerald-950 border border-emerald-500 rounded-xl text-emerald-400 font-bold text-xs";
