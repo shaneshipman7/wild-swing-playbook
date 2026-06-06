@@ -14,15 +14,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# BULLETPROOF CSS OVERRIDE: Targets main background, metrics, and top header elements
+# BULLETPROOF CSS OVERRIDE: Eliminates low-contrast text across all components
 st.markdown("""
     <style>
         /* Main background anchor */
         .main { background-color: #020617 !important; }
         
-        /* FIX: Forces all headers, standard text blocks, and markdown titles 
-           at the top of the page to render bright white/silver for absolute readability */
-        .main h1, .main h2, .main h3, .main p, .main span, .main li {
+        /* Global typography contrast fix */
+        .main h1, .main h2, .main h3, .main p, .main span, .main li, .main label {
             color: #f8fafc !important;
         }
         
@@ -32,7 +31,7 @@ st.markdown("""
             font-style: italic;
         }
         
-        /* Metric card background wrapper */
+        /* Metric card container styling */
         div[data-testid="stMetric"] {
             background-color: #0f172a !important; 
             padding: 22px !important; 
@@ -41,25 +40,30 @@ st.markdown("""
             box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
         }
         
-        /* FIX: Forces the tiny metric label text to be bright white and readable */
-        div[data-testid="stMetricLabel"] p,
+        /* FIX: Force metric labels (e.g., 'Total Active Setup Records') to be bright and clear */
+        div[data-testid="stMetricLabel"] [data-testid="stMarkdownContainer"] p,
         div[data-testid="stMetricLabel"] div,
+        div[data-testid="stMetricLabel"] p,
         div[data-testid="stMetricLabel"] {
-            color: #ffffff !important;
+            color: #f1f5f9 !important;
             font-size: 1.05rem !important;
             font-weight: 700 !important;
             letter-spacing: 0.03em !important;
-            opacity: 1.0 !important; /* Prevents Streamlit from dimming it */
+            opacity: 1.0 !important;
         }
         
-        /* Big metrics numeric readouts */
-        div[data-testid="stMetricValue"] > div {
-            color: #2dd4bf !important;
+        /* FIX: Force big metric readouts (e.g., '60', '9', '● ACTIVE') to be highly visible */
+        div[data-testid="stMetricValue"],
+        div[data-testid="stMetricValue"] > div,
+        div[data-testid="stMetricValue"] span {
+            color: #38bdf8 !important; /* Crisp light blue/cyan for metrics */
             font-size: 2.35rem !important;
             font-weight: 900 !important;
         }
         
-        /* System delta loop tags */
+        /* System delta loop tags adjustment */
+        div[data-testid="stMetricDelta"] div,
+        div[data-testid="stMetricDelta"] span,
         div[data-testid="stMetricDelta"] {
             font-weight: 700 !important;
         }
@@ -80,8 +84,6 @@ def stream_playbook_from_web():
     
     try:
         df = pd.read_csv(online_url)
-        
-        # Strip invisible whitespace characters from headers
         df.columns = df.columns.str.strip()
         
         df = df[df['Ticker'].notna()]
@@ -95,7 +97,6 @@ def stream_playbook_from_web():
             df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
             df = df.sort_values(by='Date', ascending=False)
         
-        # --- CRITICAL DEDUPLICATION MATRIX ---
         if 'Scenario' in df.columns:
             df = df.drop_duplicates(subset=['Ticker', 'Scenario'], keep='first')
         else:
@@ -129,7 +130,6 @@ while True:
     working_df = base_playbook.copy()
     unique_tickers = list(working_df['Ticker'].unique())
     
-    # --- LIVE BATCH PRICE FETCHER ---
     live_prices = {}
     if unique_tickers:
         try:
@@ -152,11 +152,9 @@ while True:
     # ====================================================================
     working_df['Live Price'] = working_df['Ticker'].map(live_prices).apply(lambda x: round(x, 2) if pd.notna(x) else None)
     
-    # Direct Fallback mappings to match columns regardless of spacing
     working_df['🔑 Entry Zone'] = working_df['Entry'].fillna('Pending Sync') if 'Entry' in working_df.columns else 'N/A'
     working_df['🛡️ Stop Loss'] = working_df['Stop_Loss'].fillna('Not Set') if 'Stop_Loss' in working_df.columns else 'N/A'
     
-    # Target Alignment
     if 'Targets' in working_df.columns:
         working_df['🎯 Target Objectives'] = working_df['Targets'].fillna('Not Set')
     elif 'Target' in working_df.columns:
@@ -164,18 +162,15 @@ while True:
     else:
         working_df['🎯 Target Objectives'] = 'Not Set'
     
-    # Variant definitions
     rr_variants = ['R_R_Ratio', 'R:R Ratio', 'Risk_Reward', 'R:R']
     prob_variants = ['Est_Probability', 'Est_Prob', 'Probability', 'Est. Probability']
 
-    # Flipped mapping searches to unswap the columns
     found_rr = next((col for col in prob_variants if col in working_df.columns), None)
     working_df['⚖️ Risk:Reward'] = working_df[found_rr].fillna('N/A') if found_rr else 'N/A'
         
     found_prob = next((col for col in rr_variants if col in working_df.columns), None)
     working_df['📊 Est. Prob.'] = working_df[found_prob].fillna('N/A') if found_prob else 'N/A'
     
-    # Direct TradingView Link Builder
     working_df['TradingView Chart'] = working_df['Ticker'].apply(
         lambda t: f"https://www.tradingview.com/symbols/{t.upper()}/" if t != 'MULTI' else ""
     )
@@ -195,7 +190,6 @@ while True:
             
         st.markdown("### 📋 Active Playbook Run-Time Matrix")
         
-        # Enforcing final physical presentation order
         final_column_layout = [
             'Ticker', 'Scenario', 'Live Price', '🔑 Entry Zone', 
             '🛡️ Stop Loss', '🎯 Target Objectives', '⚖️ Risk:Reward', '📊 Est. Prob.', 'TradingView Chart'
