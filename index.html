@@ -73,7 +73,7 @@
     </div>
 
     <script>
-        const stableFileUrl = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_2026-05-31.csv";
+        const stableFileUrl = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_2026-06-05.csv";
         
         let rawPlaybookData = [];
         let currentFilteredData = [];
@@ -150,7 +150,7 @@
         async function fetchPlaybookCSV() {
             const statusEl = document.getElementById('connectionStatus');
             try {
-                let response = await fetch(stableFileUrl);
+                let response = await fetch(stableFileUrl + '?t=' + Date.now());
                 if (!response.ok) throw new Error("File could not be requested");
                 let loadedText = await response.text();
 
