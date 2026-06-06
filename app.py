@@ -14,11 +14,23 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# BULLETPROOF CSS OVERRIDE: Targets every text layer inside the metric components
+# BULLETPROOF CSS OVERRIDE: Targets main background, metrics, and top header elements
 st.markdown("""
     <style>
         /* Main background anchor */
         .main { background-color: #020617 !important; }
+        
+        /* FIX: Forces all headers, standard text blocks, and markdown titles 
+           at the top of the page to render bright white/silver for absolute readability */
+        .main h1, .main h2, .main h3, .main p, .main span, .main li {
+            color: #f8fafc !important;
+        }
+        
+        /* Soften warning/disclaimer text subtext specifically */
+        .main em {
+            color: #94a3b8 !important;
+            font-style: italic;
+        }
         
         /* Metric card background wrapper */
         div[data-testid="stMetric"] {
@@ -136,7 +148,7 @@ while True:
             pass
 
     # ====================================================================
-    # 5. FIXED DATA ALIGNMENT & EXTRACTION MAP (SWAP CORRECTION)
+    # 5. FIXED DATA ALIGNMENT & EXTRACTION MAP
     # ====================================================================
     working_df['Live Price'] = working_df['Ticker'].map(live_prices).apply(lambda x: round(x, 2) if pd.notna(x) else None)
     
@@ -156,12 +168,10 @@ while True:
     rr_variants = ['R_R_Ratio', 'R:R Ratio', 'Risk_Reward', 'R:R']
     prob_variants = ['Est_Probability', 'Est_Prob', 'Probability', 'Est. Probability']
 
-    # --- THE FIX: Flipped the mapping searches to unswap the columns ---
-    # Risk Reward column looks for Probability labels in your raw data
+    # Flipped mapping searches to unswap the columns
     found_rr = next((col for col in prob_variants if col in working_df.columns), None)
     working_df['⚖️ Risk:Reward'] = working_df[found_rr].fillna('N/A') if found_rr else 'N/A'
         
-    # Probability column looks for Risk Reward labels in your raw data
     found_prob = next((col for col in rr_variants if col in working_df.columns), None)
     working_df['📊 Est. Prob.'] = working_df[found_prob].fillna('N/A') if found_prob else 'N/A'
     
