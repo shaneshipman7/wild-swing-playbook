@@ -136,7 +136,7 @@ while True:
             pass
 
     # ====================================================================
-    # 5. FIXED DATA ALIGNMENT & EXTRACTION MAP
+    # 5. FIXED DATA ALIGNMENT & EXTRACTION MAP (SWAP CORRECTION)
     # ====================================================================
     working_df['Live Price'] = working_df['Ticker'].map(live_prices).apply(lambda x: round(x, 2) if pd.notna(x) else None)
     
@@ -152,14 +152,17 @@ while True:
     else:
         working_df['🎯 Target Objectives'] = 'Not Set'
     
-    # Risk Reward Linkage
+    # Variant definitions
     rr_variants = ['R_R_Ratio', 'R:R Ratio', 'Risk_Reward', 'R:R']
-    found_rr = next((col for col in rr_variants if col in working_df.columns), None)
+    prob_variants = ['Est_Probability', 'Est_Prob', 'Probability', 'Est. Probability']
+
+    # --- THE FIX: Flipped the mapping searches to unswap the columns ---
+    # Risk Reward column looks for Probability labels in your raw data
+    found_rr = next((col for col in prob_variants if col in working_df.columns), None)
     working_df['⚖️ Risk:Reward'] = working_df[found_rr].fillna('N/A') if found_rr else 'N/A'
         
-    # Probability Isolation (Keeps it distinct from R:R)
-    prob_variants = ['Est_Probability', 'Est_Prob', 'Probability', 'Est. Probability']
-    found_prob = next((col for col in prob_variants if col in working_df.columns), None)
+    # Probability column looks for Risk Reward labels in your raw data
+    found_prob = next((col for col in rr_variants if col in working_df.columns), None)
     working_df['📊 Est. Prob.'] = working_df[found_prob].fillna('N/A') if found_prob else 'N/A'
     
     # Direct TradingView Link Builder
