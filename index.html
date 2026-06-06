@@ -174,34 +174,35 @@
                     header: true,
                     skipEmptyLines: true,
                     complete: function(results) {
-                        // Deduplicate: keep only the most recent play per ticker
-                        const latestByTicker = new Map();
+                        // Sort by Date descending first (newest first)
+                        const sorted = [...results.data].sort((a, b) => (b.Date || '').localeCompare(a.Date || ''));
                         
-                        results.data.forEach(row => {
+                        // Deduplicate: keep only the most recent play per ticker (including MULTI)
+                        const seen = new Set();
+                        rawPlaybookData = [];
+                        
+                        for (const row of sorted) {
                             const ticker = row.Ticker;
-                            if (!ticker || ticker === 'EXPERIMENTAL DATA ONLY') return;
+                            if (!ticker || ticker === 'EXPERIMENTAL DATA ONLY') continue;
                             
-                            const existing = latestByTicker.get(ticker);
-                            if (!existing || row.Date > existing.Date) {
-                                latestByTicker.set(ticker, row);
-                            }
-                        });
-                        
-                        rawPlaybookData = Array.from(latestByTicker.values()).map(row => {
-                            let price = parseFloat(row.Current_Price);
-                            if (isNaN(price)) price = null;
-                            
-                            let calculatedReturn = calculatePctReturn(row, price);
-                            let statusInfo = evaluatePlayStatus(row, price);
+                            if (!seen.has(ticker)) {
+                                seen.add(ticker);
+                                
+                                let price = parseFloat(row.Current_Price);
+                                if (isNaN(price)) price = null;
+                                
+                                let calculatedReturn = calculatePctReturn(row, price);
+                                let statusInfo = evaluatePlayStatus(row, price);
 
-                            return {
-                                ...row,
-                                Current_Price: price,
-                                Pct_Return: calculatedReturn,
-                                _statusText: statusInfo.text,
-                                _statusClasses: statusInfo.classes
-                            };
-                        });
+                                rawPlaybookData.push({
+                                    ...row,
+                                    Current_Price: price,
+                                    Pct_Return: calculatedReturn,
+                                    _statusText: statusInfo.text,
+                                    _statusClasses: statusInfo.classes
+                                });
+                            }
+                        }
 
                         statusEl.className = "px-4 py-2 bg-emerald-950 border border-emerald-500 rounded-xl text-emerald-400 font-bold text-xs";
                         statusEl.innerHTML = "● REPO CONNECTED";
