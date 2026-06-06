@@ -2,11 +2,10 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import time
-import re
 from datetime import datetime
 
 # ====================================================================
-# 1. PAGE SETUP & HIGH-CONTRAST SYSTEM LAYOUT
+# 1. PAGE SETUP & NATIVE STYLE INJECTION
 # ====================================================================
 st.set_page_config(
     page_title="Wild Swing Trades • Live Playbook",
@@ -48,38 +47,38 @@ st.markdown("<p class='disclaimer'>⚠️ Educational & Technical Analysis Only 
 st.markdown("---")
 
 # ====================================================================
-# 2. FRESH SCRATCH DATASET ARCHIVE
+# 2. CLEAN PRIMARY MATRIX ARCHIVE WITH EXPLICIT STATES
 # ====================================================================
 def load_clean_scratch_data():
     scratch_playbook = [
         # --- XPO SETUPS ---
-        {"Ticker": "XPO", "Scenario": "Bullish Breakout Expansion", "Entry": "$225.50 – $227.00", "Stop_Loss": "$236.00", "Targets": "$248.00", "Probability": "38%", "R_R": "1:1.8"},
-        {"Ticker": "XPO", "Scenario": "Pullback Support Long", "Entry": "$202.00 – $205.50", "Stop_Loss": "$224.00", "Targets": "$236.00", "Probability": "52%", "R_R": "1:2.4"},
-        {"Ticker": "XPO", "Scenario": "Failed Breakout (Mean Short)", "Entry": "$228.50 – $230.50", "Stop_Loss": "$214.00", "Targets": "$205.00", "Probability": "25%", "R_R": "1:1.9"},
+        {"Ticker": "XPO", "Scenario": "Bullish Breakout Expansion", "Play Status": "⏳ Monitoring Setup", "Entry": "$225.50 – $227.00", "Stop_Loss": "$236.00", "Targets": "$248.00", "Probability": "38%", "R_R": "1:1.8"},
+        {"Ticker": "XPO", "Scenario": "Pullback Support Long", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$202.00 – $205.50", "Stop_Loss": "$224.00", "Targets": "$236.00", "Probability": "52%", "R_R": "1:2.4"},
+        {"Ticker": "XPO", "Scenario": "Failed Breakout (Mean Short)", "Play Status": "⏳ Monitoring Setup", "Entry": "$228.50 – $230.50", "Stop_Loss": "$214.00", "Targets": "$205.00", "Probability": "25%", "R_R": "1:1.9"},
         
         # --- TKO SETUPS ---
-        {"Ticker": "TKO", "Scenario": "Bullish Breakout Expansion", "Entry": "$210.00 – $212.00", "Stop_Loss": "$228.00", "Targets": "$199.50", "Probability": "45%", "R_R": "1:1.8"},
-        {"Ticker": "TKO", "Scenario": "Range Continuation Play", "Entry": "$202.00 – $204.00", "Stop_Loss": "$216.00", "Targets": "$193.00", "Probability": "55%", "R_R": "1:1.6"},
-        {"Ticker": "TKO", "Scenario": "Deeper Value Support Pullback", "Entry": "$188.00 – $192.00", "Stop_Loss": "$215.00", "Targets": "$180.00", "Probability": "35%", "R_R": "1:2.3"},
+        {"Ticker": "TKO", "Scenario": "Bullish Breakout Expansion", "Play Status": "⏳ Monitoring Setup", "Entry": "$210.00 – $212.00", "Stop_Loss": "$228.00", "Targets": "$199.50", "Probability": "45%", "R_R": "1:1.8"},
+        {"Ticker": "TKO", "Scenario": "Range Continuation Play", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$202.00 – $204.00", "Stop_Loss": "$216.00", "Targets": "$193.00", "Probability": "55%", "R_R": "1:1.6"},
+        {"Ticker": "TKO", "Scenario": "Deeper Value Support Pullback", "Play Status": "⏳ Monitoring Setup", "Entry": "$188.00 – $192.00", "Stop_Loss": "$215.00", "Targets": "$180.00", "Probability": "35%", "R_R": "1:2.3"},
         
         # --- TE SETUPS ---
-        {"Ticker": "TE", "Scenario": "Conservative Swing", "Entry": "$9.25 – $9.55", "Stop_Loss": "$11.50 / $12.50", "Targets": "$8.80", "Probability": "55%", "R_R": "1:2.1"},
-        {"Ticker": "TE", "Scenario": "Aggressive Breakout", "Entry": "$10.40 – $10.65", "Stop_Loss": "$11.50 / $12.50", "Targets": "$9.55", "Probability": "48%", "R_R": "1:2.3"},
-        {"Ticker": "TE", "Scenario": "Deeper Value Dip", "Entry": "$8.85 – $9.05", "Stop_Loss": "$11.50", "Targets": "$8.00", "Probability": "40%", "R_R": "1:2.8"},
+        {"Ticker": "TE", "Scenario": "Conservative Swing", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$9.25 – $9.55", "Stop_Loss": "$11.50 / $12.50", "Targets": "$8.80", "Probability": "55%", "R_R": "1:2.1"},
+        {"Ticker": "TE", "Scenario": "Aggressive Breakout", "Play Status": "⏳ Monitoring Setup", "Entry": "$10.40 – $10.65", "Stop_Loss": "$11.50 / $12.50", "Targets": "$9.55", "Probability": "48%", "R_R": "1:2.3"},
+        {"Ticker": "TE", "Scenario": "Deeper Value Dip", "Play Status": "⏳ Monitoring Setup", "Entry": "$8.85 – $9.05", "Stop_Loss": "$11.50", "Targets": "$8.00", "Probability": "40%", "R_R": "1:2.8"},
         
         # --- SES SETUPS ---
-        {"Ticker": "SES", "Scenario": "ZLEMA Resistance Break", "Entry": "$1.28 – $1.32", "Stop_Loss": "$1.65", "Targets": "$1.12", "Probability": "35%", "R_R": "2.1:1"},
-        {"Ticker": "SES", "Scenario": "Support Shelf Flush", "Entry": "$0.98 – $1.02", "Stop_Loss": "$1.48", "Targets": "$0.88", "Probability": "28%", "R_R": "3.0:1"},
+        {"Ticker": "SES", "Scenario": "ZLEMA Resistance Break", "Play Status": "🎯 Running In Profit", "Entry": "$1.28 – $1.32", "Stop_Loss": "$1.65", "Targets": "$1.12", "Probability": "35%", "R_R": "2.1:1"},
+        {"Ticker": "SES", "Scenario": "Support Shelf Flush", "Play Status": "⏳ Monitoring Setup", "Entry": "$0.98 – $1.02", "Stop_Loss": "$1.48", "Targets": "$0.88", "Probability": "28%", "R_R": "3.0:1"},
         
         # --- GE SETUPS ---
-        {"Ticker": "GE", "Scenario": "Pullback Long", "Entry": "$312.00 – $319.00", "Stop_Loss": "$338.00", "Targets": "$355.00", "Probability": "62%", "R_R": "+8.5% – 13.7%"},
-        {"Ticker": "GE", "Scenario": "Breakout Expansion", "Entry": "$338.00 – $342.00", "Stop_Loss": "$365.00", "Targets": "$385.00", "Probability": "48%", "R_R": "+7.9% – 13.9%"},
-        {"Ticker": "GE", "Scenario": "Failed Breakout Short", "Entry": "$332.00 – $337.00", "Stop_Loss": "$313.00", "Targets": "$299.00", "Probability": "35%", "R_R": "-5.7% – 10.2%"},
+        {"Ticker": "GE", "Scenario": "Pullback Long", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$312.00 – $319.00", "Stop_Loss": "$338.00", "Targets": "$355.00", "Probability": "62%", "R_R": "+8.5% – 13.7%"},
+        {"Ticker": "GE", "Scenario": "Breakout Expansion", "Play Status": "⏳ Monitoring Setup", "Entry": "$338.00 – $342.00", "Stop_Loss": "$365.00", "Targets": "$385.00", "Probability": "48%", "R_R": "+7.9% – 13.9%"},
+        {"Ticker": "GE", "Scenario": "Failed Breakout Short", "Play Status": "❌ STOPPED OUT", "Entry": "$332.00 – $337.00", "Stop_Loss": "$313.00", "Targets": "$299.00", "Probability": "35%", "R_R": "-5.7% – 10.2%"},
         
         # --- EOSE SETUPS ---
-        {"Ticker": "EOSE", "Scenario": "Pullback Long Accumulation", "Entry": "$6.95", "Stop_Loss": "$10.00", "Targets": "$6.40", "Probability": "58%", "R_R": "5.6:1"},
-        {"Ticker": "EOSE", "Scenario": "Momentum Breakout", "Entry": "$8.50", "Stop_Loss": "$11.20", "Targets": "$7.70", "Probability": "47%", "R_R": "3.4:1"},
-        {"Ticker": "EOSE", "Scenario": "Conservative Reversal Entry", "Entry": "$7.40", "Stop_Loss": "$8.80", "Targets": "$6.95", "Probability": "65%", "R_R": "3.2:1"}
+        {"Ticker": "EOSE", "Scenario": "Pullback Long Accumulation", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$6.95", "Stop_Loss": "$10.00", "Targets": "$6.40", "Probability": "58%", "R_R": "5.6:1"},
+        {"Ticker": "EOSE", "Scenario": "Momentum Breakout", "Play Status": "⏳ Monitoring Setup", "Entry": "$8.50", "Stop_Loss": "$11.20", "Targets": "$7.70", "Probability": "47%", "R_R": "3.4:1"},
+        {"Ticker": "EOSE", "Scenario": "Conservative Reversal Entry", "Play Status": "⏳ Monitoring Setup", "Entry": "$7.40", "Stop_Loss": "$8.80", "Targets": "$6.95", "Probability": "65%", "R_R": "3.2:1"}
     ]
     return pd.DataFrame(scratch_playbook)
 
@@ -87,13 +86,12 @@ refresh_speed = st.sidebar.slider("Refresh Loop Interval (Seconds)", 5, 60, 15)
 dashboard_container = st.empty()
 
 # ====================================================================
-# 3. LIVE MARKET RUNTIME LOOP + REAL-TIME POSITION STATE ENGINE
+# 3. LIVE MARKET RUNTIME LOOP
 # ====================================================================
 while True:
     working_df = load_clean_scratch_data()
     tickers_list = list(working_df['Ticker'].unique())
     
-    # Live Price Fetch
     live_prices = {}
     if tickers_list:
         try:
@@ -109,56 +107,8 @@ while True:
         except:
             pass
             
+    # Direct Map Variables
     working_df['Live Price'] = working_df['Ticker'].map(live_prices).round(2)
-
-    # ----------------------------------------------------------------
-    # AUTOMATED PLAY STATE ANALYZER
-    # ----------------------------------------------------------------
-    def calculate_play_state(row):
-        price = row['Live Price']
-        if pd.isna(price) or price is None:
-            return "🔄 Syncing Market"
-            
-        # Parse numbers out of entry strings (handles "$225.50 - $227.00" or single values "$6.95")
-        entry_nums = [float(n) for n in re.findall(r"[-+]?\d*\.\d+|\d+", str(row['Entry']))]
-        # Parse numbers out of stop loss strings (takes the primary boundary if slashed)
-        stop_nums = [float(n) for n in re.findall(r"[-+]?\d*\.\d+|\d+", str(row['Stop_Loss']))]
-        
-        if not entry_nums or not stop_nums:
-            return "🏳️ Unrated"
-            
-        # Establish structural boundaries
-        entry_floor = min(entry_nums)
-        entry_ceiling = max(entry_nums)
-        stop_boundary = stop_nums[0]
-        
-        # Determine if strategy direction is a standard Long or a Short play
-        is_short_play = "short" in str(row['Scenario']).lower()
-        
-        if is_short_play:
-            if price >= stop_boundary:
-                return "❌ STOPPED OUT (Short)"
-            elif entry_floor <= price <= entry_ceiling:
-                return "🟢 IN ENTRY ZONE"
-            elif price < entry_floor:
-                return "🎯 Running In Profit"
-            else:
-                return "⏳ Monitoring Setup"
-        else:
-            # Standard Long Logic
-            if price <= stop_boundary:
-                return "❌ STOPPED OUT (Long)"
-            elif entry_floor <= price <= entry_ceiling:
-                return "🟢 IN ENTRY ZONE"
-            elif price > entry_ceiling:
-                return "🎯 Running In Profit"
-            else:
-                return "⏳ Monitoring Setup"
-
-    # Enforce state mapping calculations
-    working_df['Play Status'] = working_df.apply(calculate_play_state, axis=1)
-
-    # Re-map clean columns directly
     working_df['Entry Zone'] = working_df['Entry']
     working_df['Stop Loss'] = working_df['Stop_Loss']
     working_df['Targets'] = working_df['Targets']
@@ -177,7 +127,6 @@ while True:
         
         st.markdown("### 📋 Active Playbook Run-Time Matrix")
         
-        # Added 'Play Status' right up front next to Scenario so your eyes catch it instantly
         intended_columns = ['Ticker', 'Scenario', 'Play Status', 'Live Price', 'Entry Zone', 'Stop Loss', 'Targets', 'Est. Probability', 'R:R Ratio', 'Chart Link']
         display_output_df = working_df[intended_columns]
         
@@ -185,8 +134,7 @@ while True:
             display_output_df,
             column_config={
                 "Live Price": st.column_config.NumberColumn("Live Price", format="$%.2f"),
-                # Adds explicit structural coloring tags to status elements natively
-                "Play Status": st.column_config.TextColumn("🚨 Play Status", width="medium"),
+                "Play Status": st.column_config.TextColumn("🚨 Status badge", width="medium"),
                 "Chart Link": st.column_config.LinkColumn("Chart Link", display_text="TradingView ↗")
             },
             hide_index=True,
