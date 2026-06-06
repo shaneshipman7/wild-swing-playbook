@@ -21,8 +21,7 @@ st.markdown("""
         /* Force the overall page background */
         .main { background-color: #020617 !important; }
         
-        /* THE ULTIMATE FIX: Targets every single tag (*), shadow element, text node, 
-           label, and header within the main block and turns it bone-white. */
+        /* TARGETS EVERYTHING: Turns all nested text nodes bone-white */
         .main * {
             color: #ffffff !important;
         }
@@ -70,28 +69,33 @@ st.markdown("---")
 # ====================================================================
 @st.cache_data(ttl=30)
 def stream_playbook_from_web():
-    """Streams the raw CSV directly from the online GitHub URL into memory."""
+    """Streams raw CSV, strips whitespace, and validates tickers dynamically."""
     online_url = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_2026-06-05.csv"
     
     try:
         df = pd.read_csv(online_url)
         df.columns = df.columns.str.strip()
         
+        # 1. Clean missing records
         df = df[df['Ticker'].notna()]
-        df = df[df['Ticker'] != 'EXPERIMENTAL DATA ONLY']
-        df['Ticker'] = df['Ticker'].str.strip().str.upper()
+        df['Ticker'] = df['Ticker'].astype(str).str.strip().str.upper()
         
+        # 2. DYNAMIC VALIDATION: Keep ONLY authentic equity tickers (A-Z strings, 1-5 characters long)
+        # This completely eradicates 'MULTI', 'EXPERIMENTAL DATA ONLY', numbers, or sentences automatically.
+        df = df[df['Ticker'].str.match(r'^[A-Z]{1,5}$')]
+        
+        # 3. Format Strategies Safely
         if 'Scenario' in df.columns:
-            df['Scenario'] = df['Scenario'].str.strip()
+            df['Scenario'] = df['Scenario'].astype(str).str.strip().fillna('Standard Setup')
+        else:
+            df['Scenario'] = 'Standard Setup'
         
         if 'Date' in df.columns:
             df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
             df = df.sort_values(by='Date', ascending=False)
         
-        if 'Scenario' in df.columns:
-            df = df.drop_duplicates(subset=['Ticker', 'Scenario'], keep='first')
-        else:
-            df = df.drop_duplicates(subset=['Ticker'], keep='first')
+        # 4. FIXED DEDUPLICATION MATRIX: Protects multiple strategies for the same asset
+        df = df.drop_duplicates(subset=['Ticker', 'Scenario'], keep='first')
             
         return df
     except Exception as e:
@@ -119,17 +123,18 @@ while True:
         continue
         
     working_df = base_playbook.copy()
-    unique_tickers = list(working_df['Ticker'].unique())
+    ticker_download_list = list(working_df['Ticker'].unique())
     
+    # --- LIVE BATCH PRICE FETCHER ---
     live_prices = {}
-    if unique_tickers:
+    if ticker_download_list:
         try:
-            tickers_string = " ".join(unique_tickers)
+            tickers_string = " ".join(ticker_download_list)
             data = yf.download(tickers_string, period="1d", interval="1m", group_by='ticker', progress=False)
             
-            for ticker in unique_tickers:
+            for ticker in ticker_download_list:
                 try:
-                    if len(unique_tickers) == 1:
+                    if len(ticker_download_list) == 1:
                         live_prices[ticker] = data['Close'].iloc[-1]
                     else:
                         live_prices[ticker] = data[ticker]['Close'].iloc[-1]
@@ -153,9 +158,11 @@ while True:
     else:
         working_df['🎯 Target Objectives'] = 'Not Set'
     
+    # Core variables for mapping
     rr_variants = ['R_R_Ratio', 'R:R Ratio', 'Risk_Reward', 'R:R']
     prob_variants = ['Est_Probability', 'Est_Prob', 'Probability', 'Est. Probability']
 
+    # Matrix column orientation fix (Flipped mapping)
     found_rr = next((col for col in prob_variants if col in working_df.columns), None)
     working_df['⚖️ Risk:Reward'] = working_df[found_rr].fillna('N/A') if found_rr else 'N/A'
         
@@ -163,7 +170,7 @@ while True:
     working_df['📊 Est. Prob.'] = working_df[found_prob].fillna('N/A') if found_prob else 'N/A'
     
     working_df['TradingView Chart'] = working_df['Ticker'].apply(
-        lambda t: f"https://www.tradingview.com/symbols/{t.upper()}/" if t != 'MULTI' else ""
+        lambda t: f"https://www.tradingview.com/symbols/{t.upper()}/"
     )
 
     # ====================================================================
