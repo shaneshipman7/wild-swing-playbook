@@ -14,38 +14,40 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# CRITICAL: Custom CSS Injector to maximize text contrast in metric cards
+# BULLETPROOF CSS OVERRIDE: Targets every text layer inside the metric components
 st.markdown("""
     <style>
-        /* Force dark background for the main canvas */
+        /* Main background anchor */
         .main { background-color: #020617 !important; }
         
-        /* High-contrast container styles for top metrics */
+        /* Metric card background wrapper */
         div[data-testid="stMetric"] {
             background-color: #0f172a !important; 
-            padding: 20px !important; 
+            padding: 22px !important; 
             border-radius: 14px !important; 
             border: 2px solid #1e293b !important;
             box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
         }
         
-        /* Force metric Top Label to be Crisp, Readable Light Grey/White */
-        div[data-testid="stMetricLabel"] > div {
-            color: #f1f5f9 !important;
+        /* FIX: Forces the tiny metric label text to be bright white and readable */
+        div[data-testid="stMetricLabel"] p,
+        div[data-testid="stMetricLabel"] div,
+        div[data-testid="stMetricLabel"] {
+            color: #ffffff !important;
             font-size: 1.05rem !important;
             font-weight: 700 !important;
-            letter-spacing: 0.05em !important;
-            text-transform: uppercase !important;
+            letter-spacing: 0.03em !important;
+            opacity: 1.0 !important; /* Prevents Streamlit from dimming it */
         }
         
-        /* Force metric Big Number Value to be High-Contrast Bright Teal/White */
+        /* Big metrics numeric readouts */
         div[data-testid="stMetricValue"] > div {
             color: #2dd4bf !important;
-            font-size: 2.25rem !important;
+            font-size: 2.35rem !important;
             font-weight: 900 !important;
         }
         
-        /* Format Subtext/Delta colors strictly if present */
+        /* System delta loop tags */
         div[data-testid="stMetricDelta"] {
             font-weight: 700 !important;
         }
