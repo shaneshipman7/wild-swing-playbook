@@ -28,11 +28,21 @@
                     <h1 class="text-3xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-teal-400 to-emerald-400 flex items-center gap-3">
                         📈 Wild Swing Trades
                     </h1>
-                    <p class="text-slate-400 text-lg mt-1 font-semibold">Live Playbook <span class="text-xs font-normal text-slate-500">(most recent play per ticker + live status)</span></p>
+                    <p class="text-slate-400 text-lg mt-1 font-semibold">Live Playbook <span class="text-xs font-normal text-slate-500">(most recent data + live prices)</span></p>
                 </div>
                 <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">
+                        <label class="flex items-center gap-1.5 text-xs font-bold text-slate-300 cursor-pointer">
+                            <input type="checkbox" id="showPassed" class="w-4 h-4 accent-emerald-500" checked>
+                            <span>Passed</span>
+                        </label>
+                        <label class="flex items-center gap-1.5 text-xs font-bold text-slate-300 cursor-pointer">
+                            <input type="checkbox" id="showStopOut" class="w-4 h-4 accent-red-500" checked>
+                            <span>Stopped Out</span>
+                        </label>
+                    </div>
                     <button onclick="refreshLivePrices()" id="refreshPricesBtn"
-                            class="px-4 py-2 text-sm font-bold bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-xl flex items-center gap-2 transition-colors">
+                            class="px-4 py-2 text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl flex items-center gap-2 transition-colors">
                         <span>⟳</span>
                         <span>Refresh Live Prices</span>
                     </button>
@@ -44,14 +54,14 @@
         </header>
 
         <div class="flex-shrink-0 mb-3 px-4 py-2.5 text-[10px] leading-tight text-slate-400 bg-slate-900/70 border border-slate-800 rounded-2xl">
-            ⚠️ Educational & Technical Analysis Only — Not financial advice. Trading involves substantial risk of loss. Data from blog + live market prices. Do your own research.
+            ⚠️ Educational & Technical Analysis Only — Not financial advice. Trading involves substantial risk of loss.
         </div>
 
-        <div class="flex-shrink-0 flex items-center justify-between mb-3">
-            <div class="text-sm text-slate-400">
-                <span id="recordCount" class="font-bold text-teal-400">0 tickers</span> — most recent play per ticker
+        <div class="flex-shrink-0 flex items-center justify-between mb-3 text-sm">
+            <div>
+                <span id="recordCount" class="font-bold text-teal-400">0 plays</span>
             </div>
-            <div class="text-xs text-slate-500">Click headers to sort • Live status updates with current prices</div>
+            <div class="text-xs text-slate-500">Click column headers to sort</div>
         </div>
 
         <div class="flex-1 table-wrapper custom-scroll border border-slate-800 bg-slate-900/40 backdrop-blur-xl rounded-xl overflow-auto">
@@ -151,10 +161,10 @@
         async function loadLatestPlaybook() {
             const statusEl = document.getElementById('connectionStatus');
             try {
-                statusEl.innerHTML = "⏳ LOADING MOST RECENT...";
+                statusEl.innerHTML = "⏳ LOADING MOST RECENT DATA...";
                 const latestUrl = await getLatestPlaybookFile();
                 
-                statusEl.innerHTML = "⏳ FETCHING DATA...";
+                statusEl.innerHTML = "⏳ FETCHING...";
                 const response = await fetch(latestUrl + '?t=' + Date.now());
                 if (!response.ok) throw new Error("File could not be requested");
                 
@@ -164,23 +174,11 @@
                     header: true,
                     skipEmptyLines: true,
                     complete: function(results) {
-                        // Keep only the most recent play per ticker (newer post wins)
-                        const tickerMap = new Map();
+                        rawPlaybookData = [];
                         
                         for (const row of results.data) {
                             if (!row.Ticker || row.Ticker === 'EXPERIMENTAL DATA ONLY') continue;
                             
-                            const ticker = row.Ticker.toUpperCase().trim();
-                            
-                            // Only keep if we don't have this ticker yet, or if this one is newer
-                            if (!tickerMap.has(ticker)) {
-                                tickerMap.set(ticker, row);
-                            }
-                        }
-
-                        rawPlaybookData = [];
-                        
-                        for (const row of tickerMap.values()) {
                             let price = parseFloat(row.Current_Price);
                             if (isNaN(price)) price = null;
                             
@@ -196,22 +194,17 @@
                             });
                         }
 
-                        // Sort by date desc by default
-                        rawPlaybookData.sort((a, b) => (b.Date || '').localeCompare(a.Date || ''));
-
                         statusEl.className = "px-4 py-2 bg-emerald-950 border border-emerald-500 rounded-xl text-emerald-400 font-bold text-xs";
-                        statusEl.innerHTML = `● CONNECTED (${rawPlaybookData.length} tickers)`;
+                        statusEl.innerHTML = `● CONNECTED (${rawPlaybookData.length} plays)`;
                         
-                        // Auto fill live prices for missing ones
-                        setTimeout(() => {
-                            autoRefreshMissingPrices();
-                        }, 400);
+                        // Auto refresh live prices
+                        setTimeout(() => autoRefreshLivePrices(), 500);
                     }
                 });
             } catch (err) {
                 console.error(err);
                 statusEl.className = "px-4 py-2 bg-red-950 border border-red-500 rounded-xl text-red-400 font-bold text-xs";
-                statusEl.innerHTML = "❌ COULD NOT LOAD";
+                statusEl.innerHTML = "❌ LOAD FAILED";
             }
         }
 
@@ -230,53 +223,10 @@
             }
         }
 
-        async function autoRefreshMissingPrices() {
-            const missing = rawPlaybookData.filter(r => r.Ticker && r.Ticker !== 'MULTI' && r.Current_Price === null);
-            if (missing.length === 0) {
-                renderAll();
-                return;
-            }
-
-            const tickers = [...new Set(missing.map(r => r.Ticker.toUpperCase()))];
-            const batchSize = 6;
-
-            for (let i = 0; i < tickers.length; i += batchSize) {
-                const batch = tickers.slice(i, i + batchSize);
-                const prices = await Promise.all(batch.map(t => fetchYahooPrice(t)));
-
-                batch.forEach((ticker, idx) => {
-                    const freshPrice = prices[idx];
-                    if (freshPrice === null) return;
-
-                    rawPlaybookData.forEach(row => {
-                        if (row.Ticker && row.Ticker.toUpperCase() === ticker && row.Current_Price === null) {
-                            row.Current_Price = freshPrice;
-                            row.Pct_Return = calculatePctReturn(row, freshPrice);
-                            const statusInfo = evaluatePlayStatus(row, freshPrice);
-                            row._statusText = statusInfo.text;
-                            row._statusClasses = statusInfo.classes;
-                        }
-                    });
-                });
-
-                if (i + batchSize < tickers.length) await new Promise(r => setTimeout(r, 200));
-            }
-
-            renderAll();
-        }
-
-        async function refreshLivePrices() {
-            const btn = document.getElementById('refreshPricesBtn');
-            if (!btn) return;
-
-            const originalText = btn.innerHTML;
-            btn.innerHTML = `⟳ Updating...`;
-            btn.disabled = true;
-
+        async function autoRefreshLivePrices() {
             const tickers = [...new Set(rawPlaybookData.filter(r => r.Ticker && r.Ticker !== 'MULTI').map(r => r.Ticker.toUpperCase()))];
             if (tickers.length === 0) {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
+                renderAll();
                 return;
             }
 
@@ -304,17 +254,42 @@
             }
 
             renderAll();
+        }
+
+        async function refreshLivePrices() {
+            const btn = document.getElementById('refreshPricesBtn');
+            if (!btn) return;
+
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `⟳ Updating...`;
+            btn.disabled = true;
+
+            await autoRefreshLivePrices();
+
             btn.innerHTML = `✓ Updated`;
-            setTimeout(() => { if (btn) { btn.innerHTML = originalText; btn.disabled = false; } }, 1800);
+            setTimeout(() => {
+                if (btn) {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+            }, 1500);
         }
 
         function renderAll() {
-            document.getElementById('recordCount').innerText = `${rawPlaybookData.length} tickers`;
-            currentFilteredData = [...rawPlaybookData];
-            sortAndRender();
+            document.getElementById('recordCount').innerText = `${rawPlaybookData.length} plays`;
+            applyFiltersAndSort();
         }
 
-        function sortAndRender() {
+        function applyFiltersAndSort() {
+            const showPassed = document.getElementById('showPassed')?.checked ?? true;
+            const showStopOut = document.getElementById('showStopOut')?.checked ?? true;
+
+            currentFilteredData = rawPlaybookData.filter(row => {
+                if (!showPassed && row._statusText.includes("PASSED")) return false;
+                if (!showStopOut && row._statusText.includes("STOPPED OUT")) return false;
+                return true;
+            });
+
             currentFilteredData.sort((a, b) => {
                 let valA = sortKey === 'Play_Status' ? a._statusText : a[sortKey];
                 let valB = sortKey === 'Play_Status' ? b._statusText : b[sortKey];
@@ -358,7 +333,7 @@
                         sortKey = col.key;
                         sortAscending = true;
                     }
-                    sortAndRender();
+                    applyFiltersAndSort();
                 });
                 container.appendChild(headerCell);
             });
@@ -409,8 +384,16 @@
             });
         }
 
+        function setupFilters() {
+            const passed = document.getElementById('showPassed');
+            const stopOut = document.getElementById('showStopOut');
+            if (passed) passed.addEventListener('change', applyFiltersAndSort);
+            if (stopOut) stopOut.addEventListener('change', applyFiltersAndSort);
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             renderTableHeaders();
+            setupFilters();
             loadLatestPlaybook();
         });
     </script>
