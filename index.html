@@ -46,7 +46,7 @@
                         </label>
                     </div>
                     <div id="connectionStatus" class="px-4 py-2 bg-amber-950/60 border border-amber-500 rounded-xl text-amber-400 font-bold flex items-center gap-2 text-xs animate-pulse">
-                        ⏳ FETCHING STABLE DATA...
+                        ⏳ LOADING LATEST DATA...
                     </div>
                 </div>
             </div>
@@ -77,8 +77,6 @@
     </div>
 
     <script>
-        const stableFileUrl = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_2026-06-05.csv";
-        
         let rawPlaybookData = [];
         let currentFilteredData = [];
         let sortKey = 'Date';
@@ -150,11 +148,32 @@
             return { text: "🏁 PASSED / MONITORING", classes: "bg-slate-900 text-slate-400 border border-slate-800" };
         }
 
+        async function getLatestPlaybookFile() {
+            // Dynamically find the most recent Master_Playbook_Database_*.csv
+            const apiUrl = "https://api.github.com/repos/shaneshipman7/wild-swing-playbook/contents/";
+            const response = await fetch(apiUrl);
+            if (!response.ok) throw new Error("Could not list repo files");
+            
+            const files = await response.json();
+            const csvFiles = files
+                .filter(f => f.name.startsWith("Master_Playbook_Database_") && f.name.endsWith(".csv"))
+                .sort((a, b) => b.name.localeCompare(a.name)); // newest first (YYYY-MM-DD sorts correctly)
+            
+            if (csvFiles.length === 0) throw new Error("No playbook CSV files found");
+            
+            return csvFiles[0].download_url; // raw URL of the newest file
+        }
+
         async function fetchPlaybookCSV() {
             const statusEl = document.getElementById('connectionStatus');
             try {
-                let response = await fetch(stableFileUrl + '?t=' + Date.now());
+                statusEl.innerHTML = "⏳ FINDING LATEST DATA...";
+                const latestUrl = await getLatestPlaybookFile();
+                
+                statusEl.innerHTML = "⏳ FETCHING LATEST DATA...";
+                let response = await fetch(latestUrl + '?t=' + Date.now());
                 if (!response.ok) throw new Error("File could not be requested");
+                
                 let loadedText = await response.text();
 
                 Papa.parse(loadedText, {
@@ -183,8 +202,9 @@
                     }
                 });
             } catch (err) {
+                console.error(err);
                 statusEl.className = "px-4 py-2 bg-red-950 border border-red-500 rounded-xl text-red-400 font-bold text-xs";
-                statusEl.innerHTML = "❌ TARGET FILE NOT FOUND";
+                statusEl.innerHTML = "❌ COULD NOT LOAD LATEST DATA";
             }
         }
 
