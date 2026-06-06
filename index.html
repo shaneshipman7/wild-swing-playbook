@@ -40,6 +40,10 @@
                             <input type="checkbox" id="showStopOut" class="w-4 h-4 accent-red-500" checked>
                             <span>SHOW STOPPED OUT</span>
                         </label>
+                        <label class="flex items-center gap-2 text-xs font-bold text-amber-300 cursor-pointer">
+                            <input type="checkbox" id="showMulti" class="w-4 h-4 accent-amber-500">
+                            <span>SHOW MULTI</span>
+                        </label>
                     </div>
                     <div id="connectionStatus" class="px-4 py-2 bg-amber-950/60 border border-amber-500 rounded-xl text-amber-400 font-bold flex items-center gap-2 text-xs animate-pulse">
                         ⏳ FETCHING STABLE DATA...
@@ -80,7 +84,6 @@
         let sortKey = 'Date';
         let sortAscending = false;
 
-        // Cleaned up definition array: "Link/Research" column has been purged
         const columnDefinitions = [
             { key: 'Date', label: 'DATE', width: '110px' },
             { key: 'Ticker', label: 'TICKER', width: '90px' },
@@ -189,10 +192,12 @@
             const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
             const showPassed = document.getElementById('showPassed').checked;
             const showStopOut = document.getElementById('showStopOut').checked;
+            const showMulti = document.getElementById('showMulti').checked;
 
             currentFilteredData = rawPlaybookData.filter(row => {
                 if (!showPassed && row._statusText.includes("PASSED")) return false;
                 if (!showStopOut && row._statusText.includes("STOPPED OUT")) return false;
+                if (!showMulti && row.Ticker === 'MULTI') return false;
 
                 if (searchTerm) {
                     return (
@@ -326,6 +331,7 @@
             document.getElementById('searchInput').addEventListener('input', executeFilterAndRender);
             document.getElementById('showPassed').addEventListener('change', executeFilterAndRender);
             document.getElementById('showStopOut').addEventListener('change', executeFilterAndRender);
+            document.getElementById('showMulti').addEventListener('change', executeFilterAndRender);
         });
     </script>
 </body>
