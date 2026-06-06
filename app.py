@@ -19,7 +19,7 @@ st.markdown("""
         .main, [data-testid="stAppViewContainer"] { background-color: #020617 !important; }
         h1, h2, h3, p, span, label, li, div { color: #ffffff !important; }
         div[data-testid="stMetric"] { background-color: #0f172a !important; padding: 12px !important; border-radius: 8px !important; border: 1px solid #1e293b !important; }
-        div[data-testid="stMetricValue"] div, div[data-testid="stMetricValue"] span { color: #2dd4bf !important; font-weight: 800 !important; }
+        div[data-testid="stMetricValue"] div, div[data-testid="stMetricValue"] span { color: #2dd4bf !important; font_weight: 800 !important; }
         .disclaimer { color: #94a3b8 !important; font-style: italic; margin-bottom: 0px; }
         [data-testid="stDataFrame"] { background-color: #0b0e14 !important; border: 1px solid #1e232d !important; border-radius: 6px !important; padding: 4px !important; }
         [data-testid="stElementToolbar"] { display: none !important; }
@@ -210,7 +210,7 @@ ordered_cols = ['TickerLink', 'Scenario', 'Play Status', 'Live Price', 'Entry', 
 display_df = filtered_df[[c for c in ordered_cols if c in filtered_df.columns]]
 
 st.dataframe(display_df, column_config={
-    "TickerLink": st.column_config.LinkColumn("Ticker", display_text=lambda x: x.split('/')[-2] if '/' in str(x) else str(x), width="small"),
+    "TickerLink": st.column_config.LinkColumn("Ticker", display_text=r"/symbols/([^/]+)", width="small"),
     "Scenario": st.column_config.TextColumn("Scenario", width="large"),
     "Play Status": st.column_config.TextColumn("Status", width="medium"),
     "Live Price": st.column_config.NumberColumn("Live Price", format="$%.2f", width="small"),
