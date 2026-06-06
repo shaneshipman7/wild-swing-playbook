@@ -14,24 +14,25 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# BULLETPROOF CSS OVERRIDE: Eliminates low-contrast text across all components
+# THE NUCLEAR OPTION CSS OVERRIDE: 
+# Forces absolutely EVERYTHING inside the main container to obey high-contrast visibility.
 st.markdown("""
     <style>
-        /* Main background anchor */
+        /* Force the overall page background */
         .main { background-color: #020617 !important; }
         
-        /* Global typography contrast fix */
-        .main h1, .main h2, .main h3, .main p, .main span, .main li, .main label {
-            color: #f8fafc !important;
+        /* THE ULTIMATE FIX: Targets every single tag (*), shadow element, text node, 
+           label, and header within the main block and turns it bone-white. */
+        .main * {
+            color: #ffffff !important;
         }
         
-        /* Soften warning/disclaimer text subtext specifically */
-        .main em {
+        /* Soften the specific warning disclaimer layout to a readable steel grey */
+        .main em, .main i {
             color: #94a3b8 !important;
-            font-style: italic;
         }
         
-        /* Metric card container styling */
+        /* Metric card background layout framework */
         div[data-testid="stMetric"] {
             background-color: #0f172a !important; 
             padding: 22px !important; 
@@ -40,32 +41,22 @@ st.markdown("""
             box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
         }
         
-        /* FIX: Force metric labels (e.g., 'Total Active Setup Records') to be bright and clear */
-        div[data-testid="stMetricLabel"] [data-testid="stMarkdownContainer"] p,
-        div[data-testid="stMetricLabel"] div,
-        div[data-testid="stMetricLabel"] p,
-        div[data-testid="stMetricLabel"] {
-            color: #f1f5f9 !important;
-            font-size: 1.05rem !important;
-            font-weight: 700 !important;
-            letter-spacing: 0.03em !important;
-            opacity: 1.0 !important;
-        }
-        
-        /* FIX: Force big metric readouts (e.g., '60', '9', '● ACTIVE') to be highly visible */
-        div[data-testid="stMetricValue"],
-        div[data-testid="stMetricValue"] > div,
-        div[data-testid="stMetricValue"] span {
-            color: #38bdf8 !important; /* Crisp light blue/cyan for metrics */
+        /* Force the specific metric value readouts to shine in a clean cyan highlight */
+        div[data-testid="stMetricValue"] *,
+        div[data-testid="stMetricValue"] {
+            color: #2dd4bf !important;
             font-size: 2.35rem !important;
             font-weight: 900 !important;
         }
         
-        /* System delta loop tags adjustment */
-        div[data-testid="stMetricDelta"] div,
-        div[data-testid="stMetricDelta"] span,
-        div[data-testid="stMetricDelta"] {
+        /* Keep the trend delta indicators visible if they appear */
+        div[data-testid="stMetricDelta"] * {
             font-weight: 700 !important;
+        }
+        
+        /* Table headers text fix for Dataframes inside dark mode container */
+        .stDataFrame div, .stDataFrame span, .stDataFrame th, .stDataFrame td {
+            color: #ffffff !important;
         }
     </style>
 """, unsafe_allow_html=True)
