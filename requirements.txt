@@ -1,6 +1,7 @@
-feedparser
-beautifulsoup4
+streamlit
 pandas
 yfinance
+feedparser
+beautifulsoup4
 lxml
-polygon-api-client
+streamlit-autorefresh

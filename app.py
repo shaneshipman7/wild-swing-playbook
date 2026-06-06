@@ -1,20 +1,28 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-import time
 import re
 from datetime import datetime
+import feedparser
+from bs4 import BeautifulSoup
+
+# Optional but highly recommended for deployed GitHub/Streamlit Cloud apps
+# pip install streamlit-autorefresh
+try:
+    from streamlit_autorefresh import st_autorefresh
+    HAS_AUTOREFRESH = True
+except ImportError:
+    HAS_AUTOREFRESH = False
 
 # ====================================================================
-# 1. PAGE SETUP & NATIVE COMPACT STYLE INJECTION
+# 1. PAGE SETUP & STYLE
 # ====================================================================
 st.set_page_config(
-    page_title="Wild Swing Trades • Live Playbook",
+    page_title="Wild Swing Trades • Live Playbook (Blog Synced)",
     page_icon="📈",
     layout="wide"
 )
 
-# Custom style tweaks to compress viewports and remove ghost toolbars
 st.markdown("""
     <style>
         .main, [data-testid="stAppViewContainer"] { 
@@ -39,7 +47,6 @@ st.markdown("""
             font-style: italic;
             margin-bottom: 0px;
         }
-        /* Tighten up native Streamlit dataframes and hide toolbar noise */
         [data-testid="stDataFrame"] {
             background-color: #0b0e14 !important;
             border: 1px solid #1e232d !important;
@@ -49,50 +56,189 @@ st.markdown("""
         [data-testid="stElementToolbar"] {
             display: none !important;
         }
+        .stButton button {
+            background-color: #0ea5e9 !important;
+            color: white !important;
+            border: none !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
 st.title("📈 Wild Swing Trades — Playbook Intelligence Hub")
-st.markdown("<p class='disclaimer'>⚠️ Educational & Technical Analysis Only — Not financial advice.</p>", unsafe_allow_html=True)
+st.markdown("<p class='disclaimer'>⚠️ Educational & Technical Analysis Only — Not financial advice. Data auto-synced from your blog at wildswingtrades.blogspot.com (RSS). Scraping is best-effort; always verify levels in the original post.</p>", unsafe_allow_html=True)
 st.markdown("---")
 
 # ====================================================================
-# 2. RAW PLAYBOOK DATA ROUTINE (CLEANED & INVERSION FIXES)
+# 2. BLOG SCRAPER (same robust logic as v2)
 # ====================================================================
+@st.cache_data(ttl=1800, show_spinner="Syncing latest plays from your blog...")
 def get_raw_playbook():
+    """
+    Dynamically scrapes your Wild Swing Trades blog RSS.
+    Returns list of dicts ready for the matrix.
+    """
+    FEED_URL = "https://wildswingtrades.blogspot.com/feeds/posts/default?alt=rss&max-results=50"
+    
+    try:
+        feed = feedparser.parse(FEED_URL)
+        if not feed.entries:
+            raise ValueError("Empty feed")
+        
+        all_plays = []
+        seen_tickers = set()
+        now = datetime.now()
+        
+        for entry in feed.entries:
+            try:
+                title = entry.get("title", "")
+                link = entry.get("link", "")
+                pub_parsed = entry.get("published_parsed")
+                pub_date = datetime(*pub_parsed[:6]) if pub_parsed else now
+                
+                days_old = (now - pub_date).days
+                if days_old > 14:
+                    continue
+                
+                content_html = entry.get("description", "") or entry.get("summary", "")
+                soup = BeautifulSoup(content_html, "lxml")
+                full_text = soup.get_text(separator=" ", strip=True)
+                text_lower = full_text.lower()
+                
+                # Ticker
+                ticker_match = re.search(r'\$([A-Z]{2,5})\b', title)
+                if not ticker_match:
+                    ticker_match = re.search(r'\b([A-Z]{2,5})\b(?=.*(?:stock|inc|holdings|group|etf|fund))', title, re.IGNORECASE)
+                if not ticker_match:
+                    continue
+                ticker = ticker_match.group(1).upper()
+                
+                if ticker in seen_tickers:
+                    continue
+                seen_tickers.add(ticker)
+                
+                # Scenario base
+                scenario_base = title.split(":")[0].strip() if ":" in title else title[:70]
+                scenario_base = re.sub(r'\s*\(.*?\)\s*|\$?[A-Z]{2,5}', '', scenario_base).strip()
+                
+                # Direction
+                direction = "Long"
+                if any(kw in text_lower for kw in ["short", "bearish", "resistance play", "failed breakout short"]):
+                    direction = "Short"
+                
+                # Price extraction helpers
+                def find_price(keyword_regex, text, fallback=None):
+                    pattern = rf'{keyword_regex}[^.]*?\$?(\d{{1,4}}(?:\.\d{{1,2}})?)'
+                    m = re.search(pattern, text, re.IGNORECASE)
+                    if m:
+                        try:
+                            val = float(m.group(1))
+                            if 0.5 < val < 1000:
+                                return val
+                        except:
+                            pass
+                    return fallback
+                
+                current_price = find_price(r'(?:near|around|consolidat|trading at|close|currently)', full_text)
+                support = find_price(r'support', full_text, current_price * 0.96 if current_price else None)
+                resistance = find_price(r'(?:resistance|target|breakout to|upside to)', full_text)
+                
+                if not resistance and current_price:
+                    all_prices = [float(p) for p in re.findall(r'\$?(\d{1,4}(?:\.\d{1,2})?)', full_text)]
+                    higher = [p for p in all_prices if p > (current_price or 0) * 1.05]
+                    if higher:
+                        resistance = max(higher[:5])
+                
+                # Status
+                base_status = "⏳ Monitoring Setup"
+                if any(kw in text_lower for kw in ["break out", "breaks out", "surge", "explosive", "reclaim", "new high"]):
+                    base_status = "🟢 Momentum / Breakout Setup"
+                elif any(kw in text_lower for kw in ["pullback", "dip buy", "value support", "consolidat"]):
+                    base_status = "🟢 IN ENTRY ZONE"
+                if days_old <= 1:
+                    base_status = "🆕 Fresh • " + base_status
+                
+                def make_zone(price, spread=0.018):
+                    if not price or price <= 0:
+                        return "TBD"
+                    low = round(price * (1 - spread), 2)
+                    high = round(price * (1 + spread), 2)
+                    return f"${low:.2f} – ${high:.2f}" if low != high else f"${low:.2f}"
+                
+                plays_for_this = []
+                
+                # Play 1: Support/Pullback
+                if support or current_price:
+                    entry_p = support or (current_price * 0.97 if current_price else 0)
+                    stop_p = support * 0.93 if support and support > 0 else (entry_p * 0.90 if entry_p > 0 else 0)
+                    tgt_p = resistance or (current_price * 1.12 if current_price else entry_p * 1.15)
+                    if direction == "Long" and tgt_p and entry_p and tgt_p < entry_p:
+                        tgt_p = entry_p * 1.18
+                    
+                    plays_for_this.append({
+                        "Ticker": ticker,
+                        "Scenario": f"{scenario_base} — Pullback/Support Play",
+                        "Direction": direction,
+                        "Play Status": base_status,
+                        "Entry": make_zone(entry_p),
+                        "Stop_Loss": f"${stop_p:.2f}" if stop_p > 0 else "TBD",
+                        "Targets": make_zone(tgt_p),
+                        "Blog Link": link,
+                        "Pub Date": pub_date.strftime("%Y-%m-%d"),
+                        "Days Old": days_old
+                    })
+                
+                # Play 2: Breakout/Expansion
+                if current_price or resistance:
+                    entry_p2 = resistance or (current_price * 1.03 if current_price else 0)
+                    stop_p2 = (current_price * 0.97 if current_price else entry_p2 * 0.95) if direction == "Long" else (entry_p2 * 1.04)
+                    tgt_p2 = (resistance * 1.15 if resistance else (current_price * 1.22 if current_price else 0)) if direction == "Long" else (current_price * 0.88 if current_price else 0)
+                    if direction == "Long" and tgt_p2 and entry_p2 and tgt_p2 < entry_p2 * 1.08:
+                        tgt_p2 = entry_p2 * 1.20
+                    
+                    plays_for_this.append({
+                        "Ticker": ticker,
+                        "Scenario": f"{scenario_base} — Breakout/Expansion Play",
+                        "Direction": direction,
+                        "Play Status": base_status.replace("IN ENTRY ZONE", "⏳ Monitoring Breakout"),
+                        "Entry": make_zone(entry_p2),
+                        "Stop_Loss": f"${stop_p2:.2f}" if stop_p2 > 0 else "TBD",
+                        "Targets": make_zone(tgt_p2),
+                        "Blog Link": link,
+                        "Pub Date": pub_date.strftime("%Y-%m-%d"),
+                        "Days Old": days_old
+                    })
+                
+                for p in plays_for_this[:2]:
+                    all_plays.append(p)
+                
+                if len(all_plays) >= 20:
+                    break
+                    
+            except Exception:
+                continue
+        
+        if not all_plays:
+            return get_fallback_playbook()
+        
+        all_plays.sort(key=lambda x: (-x.get("Days Old", 99), x["Ticker"]))
+        return all_plays
+        
+    except Exception as e:
+        st.warning(f"Blog sync issue: {str(e)[:150]}. Showing fallback data.")
+        return get_fallback_playbook()
+
+
+def get_fallback_playbook():
     return [
-        # --- XPO SETUPS ---
-        {"Ticker": "XPO", "Scenario": "Bullish Breakout Expansion", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$225.50 – $227.00", "Stop_Loss": "$214.00", "Targets": "$248.00"},
-        {"Ticker": "XPO", "Scenario": "Pullback Support Long", "Direction": "Long", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$202.00 – $205.50", "Stop_Loss": "$190.00", "Targets": "$236.00"},
-        {"Ticker": "XPO", "Scenario": "Failed Breakout (Mean Short)", "Direction": "Short", "Play Status": "⏳ Monitoring Setup", "Entry": "$228.50 – $230.50", "Stop_Loss": "$239.00", "Targets": "$205.00"},
-        
-        # --- TKO SETUPS ---
-        {"Ticker": "TKO", "Scenario": "Bullish Breakout Expansion", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$210.00 – $212.00", "Stop_Loss": "$201.00", "Targets": "$228.00"},
-        {"Ticker": "TKO", "Scenario": "Range Continuation Play", "Direction": "Short", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$202.00 – $204.00", "Stop_Loss": "$216.00", "Targets": "$193.00"},
-        {"Ticker": "TKO", "Scenario": "Deeper Value Support Pullback", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$188.00 – $192.00", "Stop_Loss": "$180.00", "Targets": "$215.00"},
-        
-        # --- TE SETUPS ---
-        {"Ticker": "TE", "Scenario": "Conservative Swing", "Direction": "Short", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$9.25 – $9.55", "Stop_Loss": "$10.15", "Targets": "$8.80"},
-        {"Ticker": "TE", "Scenario": "Aggressive Breakout", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$10.40 – $10.65", "Stop_Loss": "$9.55", "Targets": "$12.00"},
-        {"Ticker": "TE", "Scenario": "Deeper Value Dip", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$8.85 – $9.05", "Stop_Loss": "$8.00", "Targets": "$11.50"},
-        
-        # --- SES SETUPS ---
-        {"Ticker": "SES", "Scenario": "ZLEMA Resistance Break", "Direction": "Short", "Play Status": "🎯 Running In Profit", "Entry": "$1.28 – $1.32", "Stop_Loss": "$1.41", "Targets": "$1.12"},
-        {"Ticker": "SES", "Scenario": "Support Shelf Flush", "Direction": "Short", "Play Status": "⏳ Monitoring Setup", "Entry": "$0.98 – $1.02", "Stop_Loss": "$1.08", "Targets": "$0.88"},
-        
-        # --- GE SETUPS ---
-        {"Ticker": "GE", "Scenario": "Pullback Long", "Direction": "Long", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$312.00 – $319.00", "Stop_Loss": "$295.00", "Targets": "$355.00"},
-        {"Ticker": "GE", "Scenario": "Breakout Expansion", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$338.00 – $342.00", "Stop_Loss": "$320.00", "Targets": "$385.00"},
-        {"Ticker": "GE", "Scenario": "Failed Breakout Short", "Direction": "Short", "Play Status": "❌ STOPPED OUT", "Entry": "$332.00 – $337.00", "Stop_Loss": "$355.00", "Targets": "$299.00"},
-        
-        # --- EOSE SETUPS ---
-        {"Ticker": "EOSE", "Scenario": "Pullback Long Accumulation", "Direction": "Long", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$6.95", "Stop_Loss": "$6.40", "Targets": "$10.00"},
-        {"Ticker": "EOSE", "Scenario": "Momentum Breakout", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$8.50", "Stop_Loss": "$7.70", "Targets": "$11.20"},
-        {"Ticker": "EOSE", "Scenario": "Conservative Reversal Entry", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$7.40", "Stop_Loss": "$6.95", "Targets": "$8.80"}
+        {"Ticker": "XPO", "Scenario": "Bullish Breakout Expansion", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$225.50 – $227.00", "Stop_Loss": "$214.00", "Targets": "$248.00", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1},
+        {"Ticker": "XPO", "Scenario": "Pullback Support Long", "Direction": "Long", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$202.00 – $205.50", "Stop_Loss": "$190.00", "Targets": "$236.00", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1},
+        {"Ticker": "TKO", "Scenario": "Bullish Breakout Expansion", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$210.00 – $212.00", "Stop_Loss": "$201.00", "Targets": "$228.00", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1},
+        {"Ticker": "TE", "Scenario": "Aggressive Breakout", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$10.40 – $10.65", "Stop_Loss": "$9.55", "Targets": "$12.00", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1},
+        {"Ticker": "UMAC", "Scenario": "Breakout Expansion (from blog)", "Direction": "Long", "Play Status": "🟢 Momentum / Breakout Setup", "Entry": "$26.00 – $27.50", "Stop_Loss": "$24.00", "Targets": "$42.00", "Blog Link": "https://wildswingtrades.blogspot.com/2026/06/unusual-machines-umac-surges-as.html", "Pub Date": "2026-06-05", "Days Old": 1},
     ]
 
 # ====================================================================
-# 3. PARSING & AUTOMATED MATHEMATICS ENGINE
+# 3. METRICS & LIVE PRICE HELPER
 # ====================================================================
 def parse_price(val_str):
     nums = re.findall(r"\d+\.\d+|\d+", str(val_str))
@@ -103,7 +249,6 @@ def parse_price(val_str):
 def compute_matrix_metrics(df):
     rr_ratios = []
     pct_returns = []
-    
     for _, row in df.iterrows():
         entry = parse_price(row['Entry'])
         stop = parse_price(row['Stop_Loss'])
@@ -116,90 +261,128 @@ def compute_matrix_metrics(df):
             continue
             
         if direction == "Long":
-            risk = entry - stop
-            reward = target - entry
+            risk = max(0.01, entry - stop)
+            reward = max(0.01, target - entry)
         else:
-            risk = stop - entry
-            reward = entry - target
+            risk = max(0.01, stop - entry)
+            reward = max(0.01, entry - target)
             
-        risk = 0.01 if risk <= 0 else risk
-        reward = 0.01 if reward <= 0 else reward
-        
-        return_pct = (reward / entry) * 100
         rr_ratios.append(f"1:{round(reward / risk, 1)}")
-        pct_returns.append(f"+{round(return_pct, 1)}%")
+        pct_returns.append(f"+{round((reward / entry) * 100, 1)}%")
         
     df['R:R Ratio'] = rr_ratios
     df['Est. Return'] = pct_returns
     return df
 
-# ====================================================================
-# 4. STREAMLIT RUNTIME EXECUTION
-# ====================================================================
-refresh_speed = st.sidebar.slider("Refresh Loop Interval (Seconds)", 5, 60, 15)
-dashboard_container = st.empty()
-
-while True:
-    raw_data = get_raw_playbook()
-    working_df = pd.DataFrame(raw_data)
-    tickers_list = list(working_df['Ticker'].unique())
-    
+def enrich_with_live_prices(df):
+    tickers = df['Ticker'].unique().tolist()
     live_prices = {}
-    if tickers_list:
+    if tickers:
         try:
-            market_data = yf.download(" ".join(tickers_list), period="1d", interval="1m", group_by='ticker', progress=False)
-            for ticker in tickers_list:
+            data = yf.download(" ".join(tickers), period="1d", interval="1m", group_by='ticker', progress=False, auto_adjust=True)
+            for t in tickers:
                 try:
-                    if len(tickers_list) == 1:
-                        live_prices[ticker] = market_data['Close'].iloc[-1]
+                    if len(tickers) == 1:
+                        live_prices[t] = round(float(data['Close'].iloc[-1]), 2)
                     else:
-                        live_prices[ticker] = market_data[ticker]['Close'].iloc[-1]
+                        live_prices[t] = round(float(data[t]['Close'].iloc[-1]), 2)
                 except:
-                    live_prices[ticker] = None
+                    live_prices[t] = None
         except:
             pass
-            
-    working_df['Live Price'] = working_df['Ticker'].map(live_prices).round(2)
-    working_df = compute_matrix_metrics(working_df)
-    
-    # 100% Dynamic TradingView routing layout mapping
-    working_df['Chart Link'] = working_df['Ticker'].apply(lambda t: f"https://www.tradingview.com/symbols/{str(t).upper()}/")
+    df['Live Price'] = df['Ticker'].map(live_prices)
+    return df
 
-    # ====================================================================
-    # 5. DASHBOARD PRESENTATION LAYOUT
-    # ====================================================================
-    with dashboard_container.container():
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Total Active Setups", len(working_df))
-        m2.metric("Unique Monitored Assets", working_df['Ticker'].nunique())
-        m3.metric("Stream Status", "● RUNNING", f"{refresh_speed}s loop")
-        
-        st.markdown("### 📋 Active Playbook Run-Time Matrix")
-        
-        # Order columns for clean display
-        ordered_cols = ['Ticker', 'Scenario', 'Play Status', 'Live Price', 'Entry', 'Stop_Loss', 'Targets', 'Est. Return', 'R:R Ratio', 'Chart Link']
-        display_df = working_df[ordered_cols]
-        
-        # Native dataframe viewport with locked height bounding box
-        st.dataframe(
-            display_df,
-            column_config={
-                "Ticker": st.column_config.TextColumn("Ticker", width="small"),
-                "Scenario": st.column_config.TextColumn("Scenario", width="medium"),
-                "Play Status": st.column_config.TextColumn("Status", width="medium"),
-                "Live Price": st.column_config.NumberColumn("Live Price", format="$%.2f", width="small"),
-                "Entry": st.column_config.TextColumn("Entry Zone", width="medium"),
-                "Stop_Loss": st.column_config.TextColumn("Stop Loss", width="small"),
-                "Targets": st.column_config.TextColumn("Target", width="small"),
-                "Est. Return": st.column_config.TextColumn("Est. Return", width="small"),
-                "R:R Ratio": st.column_config.TextColumn("R:R", width="small"),
-                "Chart Link": st.column_config.LinkColumn("Chart", display_text="TradingView ↗", width="small")
-            },
-            hide_index=True,
-            use_container_width=True,
-            height=380
-        )
-        
-        st.caption(f"System Heartbeat: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CST")
-        
-    time.sleep(refresh_speed)
+# ====================================================================
+# 4. MAIN APP (DEPLOYMENT-FRIENDLY - NO BLOCKING LOOP)
+# ====================================================================
+
+# --- Auto-refresh for live prices (works great on GitHub Streamlit Cloud) ---
+if HAS_AUTOREFRESH:
+    # Refresh every 25 seconds (prices only, blog data stays cached longer)
+    st_autorefresh(interval=25 * 1000, limit=200, key="price_autorefresh")
+else:
+    st.caption("💡 Tip: Install `streamlit-autorefresh` for automatic price updates (recommended for GitHub deploy).")
+
+# Sidebar controls
+with st.sidebar:
+    st.header("Controls")
+    
+    if st.button("🔄 Force Full Refresh (Blog + Prices)", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+    
+    if st.button("📈 Refresh Live Prices Only", use_container_width=True):
+        st.rerun()
+    
+    st.divider()
+    st.caption("Blog data refreshes every ~30 min automatically.\nLive prices update ~every 25s (with autorefresh) or on button click.")
+    
+    if not HAS_AUTOREFRESH:
+        st.info("For best experience on GitHub/Streamlit Cloud, add `streamlit-autorefresh` to your requirements.txt")
+
+# Load data (heavy blog scrape is cached)
+raw_plays = get_raw_playbook()
+working_df = pd.DataFrame(raw_plays)
+
+# Ensure columns
+for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Blog Link', 'Pub Date', 'Days Old']:
+    if col not in working_df.columns:
+        working_df[col] = ""
+
+# Enrich with live prices (this runs on every refresh / autorefresh)
+working_df = enrich_with_live_prices(working_df)
+working_df = compute_matrix_metrics(working_df)
+
+# TradingView links
+working_df['Chart Link'] = working_df['Ticker'].apply(lambda t: f"https://www.tradingview.com/symbols/{str(t).upper()}/")
+
+# Metrics row
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Total Active Setups", len(working_df))
+m2.metric("Unique Tickers (Recent Blog)", working_df['Ticker'].nunique())
+m3.metric("Data Window", "Last 14 days from blog")
+m4.metric("Last Updated", datetime.now().strftime("%H:%M:%S"))
+
+st.markdown("### 📋 Active Playbook — Live from Your Wild Swing Trades Blog")
+
+st.caption("Recent posts auto-parsed into multiple scenarios per ticker. Sort by **Est. Return** or **R:R Ratio** to find the strongest current setups. Click any Blog Link to read the full post.")
+
+# Display table
+ordered_cols = ['Ticker', 'Scenario', 'Play Status', 'Live Price', 'Entry', 'Stop_Loss', 'Targets', 'Est. Return', 'R:R Ratio', 'Pub Date', 'Blog Link', 'Chart Link']
+display_df = working_df[[c for c in ordered_cols if c in working_df.columns]]
+
+st.dataframe(
+    display_df,
+    column_config={
+        "Ticker": st.column_config.TextColumn("Ticker", width="small"),
+        "Scenario": st.column_config.TextColumn("Scenario", width="large"),
+        "Play Status": st.column_config.TextColumn("Status", width="medium"),
+        "Live Price": st.column_config.NumberColumn("Live Price", format="$%.2f", width="small"),
+        "Entry": st.column_config.TextColumn("Entry Zone", width="medium"),
+        "Stop_Loss": st.column_config.TextColumn("Stop Loss", width="small"),
+        "Targets": st.column_config.TextColumn("Target", width="small"),
+        "Est. Return": st.column_config.TextColumn("Est. Return", width="small"),
+        "R:R Ratio": st.column_config.TextColumn("R:R", width="small"),
+        "Pub Date": st.column_config.TextColumn("Blog Date", width="small"),
+        "Blog Link": st.column_config.LinkColumn("Blog Post", display_text="Read Full Analysis ↗", width="medium"),
+        "Chart Link": st.column_config.LinkColumn("Chart", display_text="TradingView ↗", width="small")
+    },
+    hide_index=True,
+    use_container_width=True,
+    height=420
+)
+
+# Tips
+with st.expander("💡 Spotting the really good deals"):
+    st.markdown("""
+    - **Highest Est. Return % + best R:R** = the asymmetric ones worth watching.
+    - **🟢 IN ENTRY ZONE** or **🆕 Fresh** near support = often highest probability right now.
+    - **Momentum / Breakout Setup** statuses come from your own blog keywords (surge, explosive, reclaim, etc.).
+    - Always open the **Blog Link** — the numbers here are helpful approximations extracted from the post.
+    """)
+
+st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3 GitHub/Streamlit Cloud ready • Heartbeat: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
+
+# Optional: show raw number of plays found for debugging
+# st.caption(f"Debug: {len(raw_plays)} plays loaded from blog feed")
