@@ -7,7 +7,6 @@ import feedparser
 from bs4 import BeautifulSoup
 
 # Optional but highly recommended for deployed GitHub/Streamlit Cloud apps
-# pip install streamlit-autorefresh
 try:
     from streamlit_autorefresh import st_autorefresh
     HAS_AUTOREFRESH = True
@@ -69,13 +68,13 @@ st.markdown("<p class='disclaimer'>⚠️ Educational & Technical Analysis Only 
 st.markdown("---")
 
 # ====================================================================
-# 2. BLOG SCRAPER (same robust logic as v2)
+# 2. BLOG SCRAPER (now accepts lookback_days from sidebar)
 # ====================================================================
 @st.cache_data(ttl=1800, show_spinner="Syncing latest plays from your blog...")
-def get_raw_playbook():
+def get_raw_playbook(lookback_days: int = 30):
     """
     Dynamically scrapes your Wild Swing Trades blog RSS.
-    Returns list of dicts ready for the matrix.
+    Pulls posts from the last `lookback_days` and generates 1-2 plays per ticker.
     """
     FEED_URL = "https://wildswingtrades.blogspot.com/feeds/posts/default?alt=rss&max-results=50"
     
@@ -96,7 +95,7 @@ def get_raw_playbook():
                 pub_date = datetime(*pub_parsed[:6]) if pub_parsed else now
                 
                 days_old = (now - pub_date).days
-                if days_old > 14:
+                if days_old > lookback_days:
                     continue
                 
                 content_html = entry.get("description", "") or entry.get("summary", "")
@@ -104,7 +103,7 @@ def get_raw_playbook():
                 full_text = soup.get_text(separator=" ", strip=True)
                 text_lower = full_text.lower()
                 
-                # Ticker
+                # Ticker extraction
                 ticker_match = re.search(r'\$([A-Z]{2,5})\b', title)
                 if not ticker_match:
                     ticker_match = re.search(r'\b([A-Z]{2,5})\b(?=.*(?:stock|inc|holdings|group|etf|fund))', title, re.IGNORECASE)
@@ -125,7 +124,7 @@ def get_raw_playbook():
                 if any(kw in text_lower for kw in ["short", "bearish", "resistance play", "failed breakout short"]):
                     direction = "Short"
                 
-                # Price extraction helpers
+                # Price extraction
                 def find_price(keyword_regex, text, fallback=None):
                     pattern = rf'{keyword_regex}[^.]*?\$?(\d{{1,4}}(?:\.\d{{1,2}})?)'
                     m = re.search(pattern, text, re.IGNORECASE)
@@ -294,19 +293,26 @@ def enrich_with_live_prices(df):
     return df
 
 # ====================================================================
-# 4. MAIN APP (DEPLOYMENT-FRIENDLY - NO BLOCKING LOOP)
+# 4. MAIN APP (DEPLOYMENT-FRIENDLY)
 # ====================================================================
 
-# --- Auto-refresh for live prices (works great on GitHub Streamlit Cloud) ---
 if HAS_AUTOREFRESH:
-    # Refresh every 25 seconds (prices only, blog data stays cached longer)
     st_autorefresh(interval=25 * 1000, limit=200, key="price_autorefresh")
 else:
-    st.caption("💡 Tip: Install `streamlit-autorefresh` for automatic price updates (recommended for GitHub deploy).")
+    st.caption("💡 Tip: Install `streamlit-autorefresh` for automatic price updates.")
 
 # Sidebar controls
 with st.sidebar:
     st.header("Controls")
+    
+    lookback_days = st.slider(
+        "Look back (days) from blog", 
+        min_value=7, 
+        max_value=90, 
+        value=30, 
+        step=1,
+        help="How far back to pull plays from your blog posts. Increase this to see more historical setups from older posts."
+    )
     
     if st.button("🔄 Force Full Refresh (Blog + Prices)", use_container_width=True):
         st.cache_data.clear()
@@ -321,34 +327,29 @@ with st.sidebar:
     if not HAS_AUTOREFRESH:
         st.info("For best experience on GitHub/Streamlit Cloud, add `streamlit-autorefresh` to your requirements.txt")
 
-# Load data (heavy blog scrape is cached)
-raw_plays = get_raw_playbook()
+# Load data using the slider value
+raw_plays = get_raw_playbook(lookback_days)
 working_df = pd.DataFrame(raw_plays)
 
-# Ensure columns
 for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Blog Link', 'Pub Date', 'Days Old']:
     if col not in working_df.columns:
         working_df[col] = ""
 
-# Enrich with live prices (this runs on every refresh / autorefresh)
 working_df = enrich_with_live_prices(working_df)
 working_df = compute_matrix_metrics(working_df)
 
-# TradingView links
 working_df['Chart Link'] = working_df['Ticker'].apply(lambda t: f"https://www.tradingview.com/symbols/{str(t).upper()}/")
 
-# Metrics row
+# Metrics
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Total Active Setups", len(working_df))
 m2.metric("Unique Tickers (Recent Blog)", working_df['Ticker'].nunique())
-m3.metric("Data Window", "Last 14 days from blog")
+m3.metric("Data Window", f"Last {lookback_days} days from blog")
 m4.metric("Last Updated", datetime.now().strftime("%H:%M:%S"))
 
 st.markdown("### 📋 Active Playbook — Live from Your Wild Swing Trades Blog")
-
 st.caption("Recent posts auto-parsed into multiple scenarios per ticker. Sort by **Est. Return** or **R:R Ratio** to find the strongest current setups. Click any Blog Link to read the full post.")
 
-# Display table
 ordered_cols = ['Ticker', 'Scenario', 'Play Status', 'Live Price', 'Entry', 'Stop_Loss', 'Targets', 'Est. Return', 'R:R Ratio', 'Pub Date', 'Blog Link', 'Chart Link']
 display_df = working_df[[c for c in ordered_cols if c in working_df.columns]]
 
@@ -373,16 +374,12 @@ st.dataframe(
     height=420
 )
 
-# Tips
 with st.expander("💡 Spotting the really good deals"):
     st.markdown("""
     - **Highest Est. Return % + best R:R** = the asymmetric ones worth watching.
     - **🟢 IN ENTRY ZONE** or **🆕 Fresh** near support = often highest probability right now.
-    - **Momentum / Breakout Setup** statuses come from your own blog keywords (surge, explosive, reclaim, etc.).
+    - **Momentum / Breakout Setup** statuses come from your own blog keywords.
     - Always open the **Blog Link** — the numbers here are helpful approximations extracted from the post.
     """)
 
-st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3 GitHub/Streamlit Cloud ready • Heartbeat: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
-
-# Optional: show raw number of plays found for debugging
-# st.caption(f"Debug: {len(raw_plays)} plays loaded from blog feed")
+st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3.1 (adjustable lookback) • Heartbeat: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
