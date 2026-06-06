@@ -5,6 +5,12 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import yfinance as yf
 import time
+import os
+
+try:
+    from polygon import RESTClient
+except ImportError:
+    RESTClient = None
 
 # ================== CONFIG ==================
 DAYS_BACK = 90
@@ -14,19 +20,40 @@ BLOG_RSS = "https://wildswingtrades.blogspot.com/feeds/posts/default?alt=rss"
 def fetch_previous_close_prices(tickers):
     print("Fetching previous close prices...")
     prices = {}
+    polygon_key = os.getenv("POLYGON_API_KEY")
+    client = RESTClient(polygon_key) if (polygon_key and RESTClient) else None
+
     for ticker in set(tickers):
         if ticker == "MULTI":
             continue
-        try:
-            stock = yf.Ticker(ticker)
-            hist = stock.history(period="5d")
-            if not hist.empty:
-                prices[ticker] = round(hist['Close'].iloc[-1], 2)
-                print(f"   {ticker}: ${prices[ticker]} (previous close)")
-            time.sleep(0.8)
-        except:
-            print(f"   Failed to get previous close for {ticker}")
-            prices[ticker] = None
+        price = None
+        source = ""
+
+        # Try Polygon first (more reliable for many tickers)
+        if client:
+            try:
+                snap = client.get_snapshot("stocks", ticker)
+                if snap and hasattr(snap, 'prev_day') and snap.prev_day and snap.prev_day.c:
+                    price = round(snap.prev_day.c, 2)
+                    source = "polygon"
+                    print(f"   {ticker}: ${price} (Polygon)")
+            except Exception as e:
+                print(f"   Polygon error for {ticker}: {str(e)[:80]}")
+
+        # Fallback to yfinance if Polygon didn't give a price
+        if price is None:
+            try:
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period="5d")
+                if not hist.empty:
+                    price = round(hist['Close'].iloc[-1], 2)
+                    source = "yfinance"
+                    print(f"   {ticker}: ${price} (yfinance)")
+                time.sleep(0.8)
+            except Exception as e:
+                print(f"   yfinance error for {ticker}: {str(e)[:80]}")
+
+        prices[ticker] = price
     return prices
 
 def get_latest_playbook_plays():
