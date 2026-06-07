@@ -60,7 +60,7 @@ def get_raw_playbook(lookback_days: int = 30):
                 if ticker in seen_tickers: continue
                 seen_tickers.add(ticker)
 
-                # Improved scenario cleaning - remove company names and keep it short/clean
+                # Improved scenario cleaning
                 scenario_base = title.split(":")[0].strip() if ":" in title else title[:60]
                 scenario_base = re.sub(r'\$?[A-Z]{2,5}\b|\s*\(.*?\)\s*', '', scenario_base)
                 scenario_base = re.sub(r'\b(Inc|Corp|Corporation|Holdings|Group|Technologies|Systems|Company|Inc\.|Ltd\.?|LLC)\b', '', scenario_base, flags=re.IGNORECASE)
@@ -215,7 +215,7 @@ st.caption("Click any **Ticker** to open its TradingView chart directly. No need
 # Make Ticker clickable to TradingView (removes need for separate Chart Link column)
 filtered_df['TickerLink'] = filtered_df['Ticker'].apply(lambda t: f"https://www.tradingview.com/symbols/{str(t).upper()}/")
 
-ordered_cols = ['TickerLink', 'Scenario', 'Play Status', 'Live Price', 'Entry', 'Stop_Loss', 'Targets', 'Est. Return', 'R:R Ratio', 'Pub Date', 'Blog Link']
+ordered_cols = ['TickerLink', 'Play Status', 'Live Price', 'Entry', 'Stop_Loss', 'Targets', 'Est. Return', 'R:R Ratio', 'Pub Date', 'Blog Link', 'Scenario']
 display_df = filtered_df[[c for c in ordered_cols if c in filtered_df.columns]]
 
 st.dataframe(display_df, column_config={
