@@ -59,8 +59,17 @@ def get_raw_playbook(lookback_days: int = 30):
                 ticker = ticker_match.group(1).upper()
                 if ticker in seen_tickers: continue
                 seen_tickers.add(ticker)
-                scenario_base = title.split(":")[0].strip() if ":" in title else title[:70]
-                scenario_base = re.sub(r'\s*\(.*?\)\s*|\$?[A-Z]{2,5}', '', scenario_base).strip()
+
+                # Improved scenario cleaning - remove company names and keep it short/clean
+                scenario_base = title.split(":")[0].strip() if ":" in title else title[:60]
+                scenario_base = re.sub(r'\$?[A-Z]{2,5}\b|\s*\(.*?\)\s*', '', scenario_base)
+                scenario_base = re.sub(r'\b(Inc|Corp|Corporation|Holdings|Group|Technologies|Systems|Company|Inc\.|Ltd\.?|LLC)\b', '', scenario_base, flags=re.IGNORECASE)
+                scenario_base = re.sub(r'\s+', ' ', scenario_base).strip()
+                if len(scenario_base) > 45:
+                    scenario_base = scenario_base[:45].rsplit(' ', 1)[0]
+                if not scenario_base:
+                    scenario_base = "Play"
+
                 direction = "Long"
                 if any(kw in text_lower for kw in ["short", "bearish", "resistance play", "failed breakout short"]): direction = "Short"
                 def find_price(keyword_regex, text, fallback=None):
