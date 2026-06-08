@@ -72,6 +72,7 @@ def get_raw_playbook(lookback_days: int = 30):
 
                 direction = "Long"
                 if any(kw in text_lower for kw in ["short", "bearish", "resistance play", "failed breakout short"]): direction = "Short"
+                
                 def find_price(keyword_regex, text, fallback=None):
                     pattern = rf'{keyword_regex}[^.]*?\$?(\d{{1,4}}(?:\.\d{{1,2}})?)'
                     m = re.search(pattern, text, re.IGNORECASE)
@@ -81,6 +82,12 @@ def get_raw_playbook(lookback_days: int = 30):
                             if 0.5 < val < 1000: return val
                         except: pass
                     return fallback
+
+                # --- NEW FEATURE: Extract Probability ---
+                # Looks for "75%", "75 %", "probability: 75%", "chance: 75%", "75% probability"
+                prob_match = re.search(r'(?:probability|chance)?\s*[:\-\b]?\s*(\d{2})\s*%\s*(?:probability|chance)?', text_lower)
+                probability_val = f"{prob_match.group(1)}%" if prob_match else "N/A"
+
                 current_price = find_price(r'(?:near|around|consolidat|trading at|close|currently)', full_text)
                 support = find_price(r'support', full_text, current_price * 0.96 if current_price else None)
                 resistance = find_price(r'(?:resistance|target|breakout to|upside to)', full_text)
@@ -103,13 +110,13 @@ def get_raw_playbook(lookback_days: int = 30):
                     stop_p = support * 0.93 if support and support > 0 else (entry_p * 0.90 if entry_p > 0 else 0)
                     tgt_p = resistance or (current_price * 1.12 if current_price else entry_p * 1.15)
                     if direction == "Long" and tgt_p and entry_p and tgt_p < entry_p: tgt_p = entry_p * 1.18
-                    plays_for_this.append({"Ticker": ticker, "Scenario": f"{scenario_base} — Pullback/Support Play", "Direction": direction, "Play Status": base_status, "Entry": make_zone(entry_p), "Stop_Loss": f"${stop_p:.2f}" if stop_p > 0 else "TBD", "Targets": make_zone(tgt_p), "Blog Link": link, "Pub Date": pub_date.strftime("%Y-%m-%d"), "Days Old": days_old})
+                    plays_for_this.append({"Ticker": ticker, "Scenario": f"{scenario_base} — Pullback/Support Play", "Direction": direction, "Play Status": base_status, "Entry": make_zone(entry_p), "Stop_Loss": f"${stop_p:.2f}" if stop_p > 0 else "TBD", "Targets": make_zone(tgt_p), "Probability": probability_val, "Blog Link": link, "Pub Date": pub_date.strftime("%Y-%m-%d"), "Days Old": days_old})
                 if current_price or resistance:
                     entry_p2 = resistance or (current_price * 1.03 if current_price else 0)
                     stop_p2 = (current_price * 0.97 if current_price else entry_p2 * 0.95) if direction == "Long" else (entry_p2 * 1.04)
                     tgt_p2 = (resistance * 1.15 if resistance else (current_price * 1.22 if current_price else 0)) if direction == "Long" else (current_price * 0.88 if current_price else 0)
                     if direction == "Long" and tgt_p2 and entry_p2 and tgt_p2 < entry_p2 * 1.08: tgt_p2 = entry_p2 * 1.20
-                    plays_for_this.append({"Ticker": ticker, "Scenario": f"{scenario_base} — Breakout/Expansion Play", "Direction": direction, "Play Status": base_status.replace("IN ENTRY ZONE", "⏳ Monitoring Breakout"), "Entry": make_zone(entry_p2), "Stop_Loss": f"${stop_p2:.2f}" if stop_p2 > 0 else "TBD", "Targets": make_zone(tgt_p2), "Blog Link": link, "Pub Date": pub_date.strftime("%Y-%m-%d"), "Days Old": days_old})
+                    plays_for_this.append({"Ticker": ticker, "Scenario": f"{scenario_base} — Breakout/Expansion Play", "Direction": direction, "Play Status": base_status.replace("IN ENTRY ZONE", "⏳ Monitoring Breakout"), "Entry": make_zone(entry_p2), "Stop_Loss": f"${stop_p2:.2f}" if stop_p2 > 0 else "TBD", "Targets": make_zone(tgt_p2), "Probability": probability_val, "Blog Link": link, "Pub Date": pub_date.strftime("%Y-%m-%d"), "Days Old": days_old})
                 for p in plays_for_this[:2]: all_plays.append(p)
                 if len(all_plays) >= 20: break
             except Exception: continue
@@ -121,7 +128,13 @@ def get_raw_playbook(lookback_days: int = 30):
         return get_fallback_playbook()
 
 def get_fallback_playbook():
-    return [{"Ticker": "XPO", "Scenario": "Bullish Breakout Expansion", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$225.50 – $227.00", "Stop_Loss": "$214.00", "Targets": "$248.00", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}, {"Ticker": "XPO", "Scenario": "Pullback Support Long", "Direction": "Long", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$202.00 – $205.50", "Stop_Loss": "$190.00", "Targets": "$236.00", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}, {"Ticker": "TKO", "Scenario": "Bullish Breakout Expansion", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$210.00 – $212.00", "Stop_Loss": "$201.00", "Targets": "$228.00", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}, {"Ticker": "TE", "Scenario": "Aggressive Breakout", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$10.40 – $10.65", "Stop_Loss": "$9.55", "Targets": "$12.00", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}, {"Ticker": "UMAC", "Scenario": "Breakout Expansion (from blog)", "Direction": "Long", "Play Status": "🟢 Momentum / Breakout Setup", "Entry": "$26.00 – $27.50", "Stop_Loss": "$24.00", "Targets": "$42.00", "Blog Link": "https://wildswingtrades.blogspot.com/2026/06/unusual-machines-umac-surges-as.html", "Pub Date": "2026-06-05", "Days Old": 1}]
+    return [
+        {"Ticker": "XPO", "Scenario": "Bullish Breakout Expansion", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$225.50 – $227.00", "Stop_Loss": "$214.00", "Targets": "$248.00", "Probability": "75%", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}, 
+        {"Ticker": "XPO", "Scenario": "Pullback Support Long", "Direction": "Long", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$202.00 – $205.50", "Stop_Loss": "$190.00", "Targets": "$236.00", "Probability": "75%", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}, 
+        {"Ticker": "TKO", "Scenario": "Bullish Breakout Expansion", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$210.00 – $212.00", "Stop_Loss": "$201.00", "Targets": "$228.00", "Probability": "N/A", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}, 
+        {"Ticker": "TE", "Scenario": "Aggressive Breakout", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$10.40 – $10.65", "Stop_Loss": "$9.55", "Targets": "$12.00", "Probability": "60%", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}, 
+        {"Ticker": "UMAC", "Scenario": "Breakout Expansion (from blog)", "Direction": "Long", "Play Status": "🟢 Momentum / Breakout Setup", "Entry": "$26.00 – $27.50", "Stop_Loss": "$24.00", "Targets": "$42.00", "Probability": "80%", "Blog Link": "https://wildswingtrades.blogspot.com/2026/06/unusual-machines-umac-surges-as.html", "Pub Date": "2026-06-05", "Days Old": 1}
+    ]
 
 def parse_price(val_str):
     nums = re.findall(r"\d+\.\d+|\d+", str(val_str))
@@ -164,7 +177,7 @@ def enrich_with_live_prices(df):
 lookback_days_default = 30
 raw_plays = get_raw_playbook(lookback_days_default)
 working_df = pd.DataFrame(raw_plays)
-for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Blog Link', 'Pub Date', 'Days Old']:
+for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Probability', 'Blog Link', 'Pub Date', 'Days Old']:
     if col not in working_df.columns: working_df[col] = ""
 working_df = enrich_with_live_prices(working_df)
 working_df = compute_matrix_metrics(working_df)
@@ -192,7 +205,7 @@ with st.sidebar:
 if lookback_days != lookback_days_default:
     raw_plays = get_raw_playbook(lookback_days)
     working_df = pd.DataFrame(raw_plays)
-    for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Blog Link', 'Pub Date', 'Days Old']:
+    for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Probability', 'Blog Link', 'Pub Date', 'Days Old']:
         if col not in working_df.columns: working_df[col] = ""
     working_df = enrich_with_live_prices(working_df)
     working_df = compute_matrix_metrics(working_df)
@@ -212,10 +225,11 @@ m4.metric("Last Updated", datetime.now().strftime("%H:%M:%S"))
 st.markdown("### 📋 Active Playbook — Live from Your Wild Swing Trades Blog")
 st.caption("Click any **Ticker** to open its TradingView chart directly. No need to scroll for links.")
 
-# Make Ticker clickable to TradingView (removes need for separate Chart Link column)
+# Make Ticker clickable to TradingView
 filtered_df['TickerLink'] = filtered_df['Ticker'].apply(lambda t: f"https://www.tradingview.com/symbols/{str(t).upper()}/")
 
-ordered_cols = ['TickerLink', 'Play Status', 'Live Price', 'Entry', 'Stop_Loss', 'Targets', 'Est. Return', 'R:R Ratio', 'Pub Date', 'Blog Link', 'Scenario']
+# Added 'Probability' here in the ordered column sequence
+ordered_cols = ['TickerLink', 'Play Status', 'Live Price', 'Entry', 'Stop_Loss', 'Targets', 'Est. Return', 'R:R Ratio', 'Probability', 'Pub Date', 'Blog Link', 'Scenario']
 display_df = filtered_df[[c for c in ordered_cols if c in filtered_df.columns]]
 
 st.dataframe(display_df, column_config={
@@ -228,6 +242,7 @@ st.dataframe(display_df, column_config={
     "Targets": st.column_config.TextColumn("Target", width="small"),
     "Est. Return": st.column_config.TextColumn("Est. Return", width="small"),
     "R:R Ratio": st.column_config.TextColumn("R:R", width="small"),
+    "Probability": st.column_config.TextColumn("Prob.", width="small"), # Configuration for your new column
     "Pub Date": st.column_config.TextColumn("Blog Date", width="small"),
     "Blog Link": st.column_config.LinkColumn("Blog Post", display_text="Read Analysis ↗", width="medium")
 }, hide_index=True, use_container_width=True, height=420)
@@ -239,4 +254,4 @@ with st.expander("💡 Filter tips"):
     - Use sidebar filters + lookback slider for precise control.
     """)
 
-st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3.5 (clickable Ticker) • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
+st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3.6 (with Probabilities) • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
