@@ -117,7 +117,7 @@ def get_raw_playbook(lookback_days: int = 30):
                 resistance = find_price(r'(?:resistance|target|breakout to|upside to)', full_text)
                 
                 if not resistance and current_price:
-                    all_prices = [float(p) for p in re.findall(r'\$?(\d{1,4}(?:\.\d{1,2})?)', full_text)]
+                    all_prices = [float(p) for p in re.findall(r'\$?(\d{1,4}}(?:\.\d{{1,2}})?)', full_text)]
                     higher = [p for p in all_prices if p > (current_price or 0) * 1.05]
                     if higher: 
                         resistance = max(higher[:5])
@@ -135,7 +135,7 @@ def get_raw_playbook(lookback_days: int = 30):
                         return "TBD"
                     low = round(price * (1 - spread), 2)
                     high = round(price * (1 + spread), 2)
-                    return f"${low:.2f} – ${high:.2f}" if low != high else f"${low:.2f}"
+                    return f"${low:.2f} – \( {high:.2f}" if low != high else f" \){low:.2f}"
                     
                 plays_for_this = []
                 
@@ -169,7 +169,6 @@ def get_raw_playbook(lookback_days: int = 30):
                         "Blog Link": link, "Pub Date": pub_date.strftime("%Y-%m-%d"), "Days Old": days_old
                     })
                 
-                # Appends all plays parsed without filters or slices
                 all_plays.extend(plays_for_this)
                 
             except Exception: 
@@ -205,16 +204,33 @@ def compute_matrix_metrics(df):
         entry = parse_price(row['Entry'])
         stop = parse_price(row['Stop_Loss'])
         target = parse_price(row['Targets'])
+        live = row.get('Live Price', None)
         direction = row['Direction']
-        if entry == 0.0 or stop == 0.0 or target == 0.0:
-            rr_ratios.append("1:1.0"); pct_returns.append("0.0%")
+
+        # Use Live Price for realistic Est. Return when available
+        base_price = live if (live and isinstance(live, (int, float)) and live > 0.5) else entry
+
+        if base_price == 0.0 or stop == 0.0 or target == 0.0:
+            rr_ratios.append("1:1.0")
+            pct_returns.append("N/A")
             continue
+
         if direction == "Long":
-            risk = max(0.01, entry - stop); reward = max(0.01, target - entry)
+            risk = max(0.01, entry - stop)
+            reward = max(0.01, target - base_price)
         else:
-            risk = max(0.01, stop - entry); reward = max(0.01, entry - target)
-        rr_ratios.append(f"1:{round(reward / risk, 1)}")
-        pct_returns.append(f"+{round((reward / entry) * 100, 1)}%")
+            risk = max(0.01, stop - entry)
+            reward = max(0.01, base_price - target)
+
+        rr = round(reward / risk, 1)
+        rr_ratios.append(f"1:{rr}")
+
+        if base_price > 0:
+            pct = round((reward / base_price) * 100, 1)
+            pct_returns.append(f"+{pct}%" if pct > 0 else f"{pct}%")
+        else:
+            pct_returns.append("N/A")
+
     df['R:R Ratio'] = rr_ratios
     df['Est. Return'] = pct_returns
     return df
@@ -224,7 +240,6 @@ def enrich_with_live_prices(df):
     live_prices = {}
     if tickers:
         try:
-            # Optimized multi-ticker query payload structure using daily blocks to prevent standard API network drops
             data = yf.download(" ".join(tickers), period="5d", group_by='ticker', progress=False, auto_adjust=True)
             for t in tickers:
                 try:
@@ -243,7 +258,6 @@ lookback_days_default = 30
 raw_plays = get_raw_playbook(lookback_days_default)
 working_df = pd.DataFrame(raw_plays)
 
-# Enforce uniform row layouts
 for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Prob T1', 'Prob T2', 'Blog Link', 'Pub Date', 'Days Old']:
     if col not in working_df.columns: 
         working_df[col] = ""
