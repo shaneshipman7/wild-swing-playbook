@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import xml.etree.ElementTree as ET
 import requests
-import re
 
 # Set up page configuration for mobile responsiveness
 st.set_page_config(
@@ -12,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 1. Live Feed Parser: Pulls and cleans data directly from the web
+# Live Feed Parser: Reads exact values from your Blogger labels
 @st.cache_data(ttl=60)
 def fetch_live_blog_data():
     FEED_URL = "https://wildswingtrades.blogspot.com/feeds/posts/default"
@@ -36,43 +35,37 @@ def fetch_live_blog_data():
                     blog_url = link.attrib.get('href')
                     break
             
-            # Get the text content of the post
-            content_element = entry.find('atom:content', namespaces)
-            content_text = content_element.text if content_element is not None else ""
-            
-            if not content_text or not blog_url or "template" in title.lower():
+            if not blog_url or "template" in title.lower():
                 continue
-                
-            # Strip out HTML tags completely so we only scan your natural text
-            clean_text = re.sub(r'<[^>]+>', ' ', content_text)
-            
-            # Extract raw percentages from the natural text
-            all_percentages = re.findall(r'([+-]?\d+(?:\.\d+)?)\s*%', clean_text)
-            
-            # --- Column Assignment Sorting Logic ---
-            if len(all_percentages) >= 2:
-                # If the second number found is a valid probability (<= 100), assume it's the Win Rate
-                if float(all_percentages[1]) <= 100:
-                    win_probability = float(all_percentages[1]) / 100.0
-                    avg_return = float(all_percentages[0])
-                else:
-                    win_probability = float(all_percentages[0]) / 100.0
-                    avg_return = float(all_percentages[1])
-            elif len(all_percentages) == 1:
-                # Fallback if only one percentage is written in the post
-                win_probability = float(all_percentages[0]) / 100.0
-                avg_return = 0.0
-            else:
-                # System defaults if no percentages match
-                win_probability = 0.50
-                avg_return = 0.0
-                
-            # Detect Regime based on keywords
+
+            # Default fallback values
+            win_probability = 0.50
+            avg_return = 0.0
             regime = "Trending"
-            if "mean reversion" in clean_text.lower() or "fade" in clean_text.lower():
-                regime = "Mean Reverting"
-            elif "high vol" in clean_text.lower() or "breakout" in clean_text.lower():
-                regime = "High Volatility"
+
+            # Pull metrics directly from the post category/label elements
+            for category in entry.findall('atom:category', namespaces):
+                term = category.attrib.get('term', '')
+                
+                # Check for Prob tag (e.g., "Prob: 62")
+                if "prob:" in term.lower():
+                    try:
+                        val = term.split(":")[-1].strip()
+                        win_probability = float(val) / 100.0
+                    except:
+                        pass
+                
+                # Check for Return tag (e.g., "Ret: 4.5")
+                elif "ret:" in term.lower():
+                    try:
+                        val = term.split(":")[-1].strip()
+                        avg_return = float(val)
+                    except:
+                        pass
+                
+                # Check for Regime tag
+                elif "regime:" in term.lower():
+                    regime = term.split(":")[-1].strip()
 
             play_id = f"WS-{len(playbooks) + 1:03d}"
             
@@ -100,7 +93,7 @@ try:
     if df.empty:
         st.warning("Connecting to wildswingtrades.blogspot.com...")
     else:
-        # 2. Sidebar Filters (Set wide default view for mobile visibility)
+        # Sidebar Filters
         st.sidebar.header("Filter Strategy Metrics")
         min_prob = st.sidebar.slider("Minimum Win Probability", 0.0, 1.0, 0.10, 0.01, format="%.0f%%")
         min_ret = st.sidebar.slider("Minimum Avg Return (%)", -5.0, 50.0, -5.0, 0.5, format="%.1f%%")
@@ -108,14 +101,14 @@ try:
         available_regimes = df['regime'].unique().tolist()
         selected_regimes = st.sidebar.multiselect("Market Regimes", options=available_regimes, default=available_regimes)
 
-        # 3. Filter Data
+        # Filter Data
         filtered_df = df[
             (df['win_probability'] >= min_prob) & 
             (df['avg_return'] >= min_ret) &
             (df['regime'].isin(selected_regimes))
         ]
 
-        # 4. Highlight Cards
+        # Highlight Cards
         if not filtered_df.empty:
             col1, col2 = st.columns(2)
             with col1:
@@ -126,7 +119,7 @@ try:
         st.write("### Playbook Data Matrix")
         st.caption("💡 Tap a column header to instantly sort by that metric.")
 
-        # 5. Mobile-Optimized Rendered Dataframe
+        # Render Dataframe
         st.dataframe(
             filtered_df,
             column_config={
