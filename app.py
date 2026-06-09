@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 1. Smarter Live Feed Parser
+# 1. Live Feed Parser: Pulls and cleans data directly from the web
 @st.cache_data(ttl=60)
 def fetch_live_blog_data():
     FEED_URL = "https://wildswingtrades.blogspot.com/feeds/posts/default"
@@ -43,30 +43,35 @@ def fetch_live_blog_data():
             if not content_text or not blog_url or "template" in title.lower():
                 continue
                 
-            # --- "Smarter Eyes" Extraction Logic ---
-            # Step 1: Find ALL percentages written anywhere in the post text (e.g., 55%, 4.5%)
-            all_percentages = re.findall(r'([+-]?\d+(?:\.\d+)?)\s*%', content_text)
+            # Strip out HTML tags completely so we only scan your natural text
+            clean_text = re.sub(r'<[^>]+>', ' ', content_text)
             
-            # Step 2: Assign them dynamically based on the order they appear
+            # Extract raw percentages from the natural text
+            all_percentages = re.findall(r'([+-]?\d+(?:\.\d+)?)\s*%', clean_text)
+            
+            # --- Column Assignment Sorting Logic ---
             if len(all_percentages) >= 2:
-                # First percent found becomes Win Probability
-                win_probability = float(all_percentages[0]) / 100.0
-                # Second percent found becomes Average Return
-                avg_return = float(all_percentages[1])
+                # If the second number found is a valid probability (<= 100), assume it's the Win Rate
+                if float(all_percentages[1]) <= 100:
+                    win_probability = float(all_percentages[1]) / 100.0
+                    avg_return = float(all_percentages[0])
+                else:
+                    win_probability = float(all_percentages[0]) / 100.0
+                    avg_return = float(all_percentages[1])
             elif len(all_percentages) == 1:
-                # If only one is found, treat it as Win Probability
+                # Fallback if only one percentage is written in the post
                 win_probability = float(all_percentages[0]) / 100.0
                 avg_return = 0.0
             else:
-                # Fallback constants if no percentages are in the text yet
+                # System defaults if no percentages match
                 win_probability = 0.50
                 avg_return = 0.0
                 
             # Detect Regime based on keywords
             regime = "Trending"
-            if "mean reversion" in content_text.lower() or "fade" in content_text.lower():
+            if "mean reversion" in clean_text.lower() or "fade" in clean_text.lower():
                 regime = "Mean Reverting"
-            elif "high vol" in content_text.lower() or "breakout" in content_text.lower():
+            elif "high vol" in clean_text.lower() or "breakout" in clean_text.lower():
                 regime = "High Volatility"
 
             play_id = f"WS-{len(playbooks) + 1:03d}"
@@ -95,10 +100,10 @@ try:
     if df.empty:
         st.warning("Connecting to wildswingtrades.blogspot.com...")
     else:
-        # 2. Sidebar Filters
+        # 2. Sidebar Filters (Set wide default view for mobile visibility)
         st.sidebar.header("Filter Strategy Metrics")
         min_prob = st.sidebar.slider("Minimum Win Probability", 0.0, 1.0, 0.10, 0.01, format="%.0f%%")
-        min_ret = st.sidebar.slider("Minimum Avg Return (%)", -5.0, 15.0, -5.0, 0.5, format="%.1f%%")
+        min_ret = st.sidebar.slider("Minimum Avg Return (%)", -5.0, 50.0, -5.0, 0.5, format="%.1f%%")
 
         available_regimes = df['regime'].unique().tolist()
         selected_regimes = st.sidebar.multiselect("Market Regimes", options=available_regimes, default=available_regimes)
@@ -119,8 +124,9 @@ try:
                 st.metric("Best Avg Return in View", f"{filtered_df['avg_return'].max():.1f}%")
         
         st.write("### Playbook Data Matrix")
+        st.caption("💡 Tap a column header to instantly sort by that metric.")
 
-        # 5. Render Sortable Dataframe
+        # 5. Mobile-Optimized Rendered Dataframe
         st.dataframe(
             filtered_df,
             column_config={
