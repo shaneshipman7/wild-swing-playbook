@@ -12,16 +12,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 1. Live Feed Parser: Pulls directly from the web in real-time
-@st.cache_data(ttl=60) # Automatically checks your blog for updates every 60 seconds
+# 1. Smarter Live Feed Parser
+@st.cache_data(ttl=60)
 def fetch_live_blog_data():
-    # URL to your public live Blogger RSS/Atom feed
     FEED_URL = "https://wildswingtrades.blogspot.com/feeds/posts/default"
     namespaces = {'atom': 'http://www.w3.org/2005/Atom'}
     playbooks = []
     
     try:
-        # Fetch the feed directly over the internet
         response = requests.get(FEED_URL, timeout=10)
         if response.status_code != 200:
             return pd.DataFrame(columns=["play_id", "name", "regime", "win_probability", "avg_return", "blog_url"])
@@ -45,12 +43,24 @@ def fetch_live_blog_data():
             if not content_text or not blog_url or "template" in title.lower():
                 continue
                 
-            # --- Text Search Patterns for Metrics ---
-            win_match = re.search(r'(?:win\s*rate|probability|win\s*prob).*?(\d+(?:\.\d+)?)\s*%', content_text, re.IGNORECASE)
-            win_probability = float(win_match.group(1)) / 100.0 if win_match else 0.50
-                
-            return_match = re.search(r'(?:return|avg\s*return|profit).*?([+-]?\d+(?:\.\d+)?)\s*%', content_text, re.IGNORECASE)
-            avg_return = float(return_match.group(1)) if return_match else 0.0
+            # --- "Smarter Eyes" Extraction Logic ---
+            # Step 1: Find ALL percentages written anywhere in the post text (e.g., 55%, 4.5%)
+            all_percentages = re.findall(r'([+-]?\d+(?:\.\d+)?)\s*%', content_text)
+            
+            # Step 2: Assign them dynamically based on the order they appear
+            if len(all_percentages) >= 2:
+                # First percent found becomes Win Probability
+                win_probability = float(all_percentages[0]) / 100.0
+                # Second percent found becomes Average Return
+                avg_return = float(all_percentages[1])
+            elif len(all_percentages) == 1:
+                # If only one is found, treat it as Win Probability
+                win_probability = float(all_percentages[0]) / 100.0
+                avg_return = 0.0
+            else:
+                # Fallback constants if no percentages are in the text yet
+                win_probability = 0.50
+                avg_return = 0.0
                 
             # Detect Regime based on keywords
             regime = "Trending"
@@ -79,16 +89,16 @@ try:
     df = fetch_live_blog_data()
 
     st.title("📊 Wild Swing Trades")
-    st.caption("100% Automated Performance Matrix (Live Live Live)")
+    st.caption("100% Automated Performance Matrix")
     st.divider()
 
     if df.empty:
-        st.warning("Connecting to wildswingtrades.blogspot.com... If this stays blank, your dashboard cannot reach the blog URL.")
+        st.warning("Connecting to wildswingtrades.blogspot.com...")
     else:
         # 2. Sidebar Filters
         st.sidebar.header("Filter Strategy Metrics")
-        min_prob = st.sidebar.slider("Minimum Win Probability", 0.0, 1.0, 0.40, 0.01, format="%.0f%%")
-        min_ret = st.sidebar.slider("Minimum Avg Return (%)", -5.0, 15.0, 0.0, 0.5, format="%.1f%%")
+        min_prob = st.sidebar.slider("Minimum Win Probability", 0.0, 1.0, 0.10, 0.01, format="%.0f%%")
+        min_ret = st.sidebar.slider("Minimum Avg Return (%)", -5.0, 15.0, -5.0, 0.5, format="%.1f%%")
 
         available_regimes = df['regime'].unique().tolist()
         selected_regimes = st.sidebar.multiselect("Market Regimes", options=available_regimes, default=available_regimes)
@@ -109,7 +119,6 @@ try:
                 st.metric("Best Avg Return in View", f"{filtered_df['avg_return'].max():.1f}%")
         
         st.write("### Playbook Data Matrix")
-        st.caption("💡 Tap a column header to instantly sort by that metric.")
 
         # 5. Render Sortable Dataframe
         st.dataframe(
