@@ -1,184 +1,243 @@
-# =============================================================================
-# Grok API Ticker Analysis Script - Real-Time Search & Blogger Ready
-# Fixed for xAI Responses API (June 2026) - Real-Time Date Automation Included
-# =============================================================================
-
-from google.colab import userdata, files
-import os
-import time
+import streamlit as st
+import pandas as pd
+import yfinance as yf
 import re
 from datetime import datetime
-import requests
-from typing import List, Dict
+import feedparser
+from bs4 import BeautifulSoup
 
-# ----------------------------- API SETUP -----------------------------
 try:
-    GROK_API_KEY = userdata.get("GROK_API_KEY")
-except Exception:
-    GROK_API_KEY = os.getenv("GROK_API_KEY")
+    from streamlit_autorefresh import st_autorefresh
+    HAS_AUTOREFRESH = True
+except ImportError:
+    HAS_AUTOREFRESH = False
 
-if not GROK_API_KEY:
-    raise ValueError("❌ GROK_API_KEY not found in Colab Secrets! Add it under the key icon.")
+st.set_page_config(page_title="Wild Swing Trades • Live Playbook (Blog Synced)", page_icon="📈", layout="wide")
 
-API_URL = "https://api.x.ai/v1/responses"
-MODEL_TAG = "grok-4.3"
+st.markdown("""
+    <style>
+        .main, [data-testid="stAppViewContainer"] { background-color: #020617 !important; }
+        h1, h2, h3, p, span, label, li, div { color: #ffffff !important; }
+        div[data-testid="stMetric"] { background-color: #0f172a !important; padding: 12px !important; border-radius: 8px !important; border: 1px solid #1e293b !important; }
+        div[data-testid="stMetricValue"] div, div[data-testid="stMetricValue"] span { color: #2dd4bf !important; font_weight: 800 !important; }
+        .disclaimer { color: #94a3b8 !important; font-style: italic; margin-bottom: 0px; }
+        [data-testid="stDataFrame"] { background-color: #0b0e14 !important; border: 1px solid #1e232d !important; border-radius: 6px !important; padding: 4px !important; }
+        [data-testid="stElementToolbar"] { display: none !important; }
+        .stButton button { background-color: #0ea5e9 !important; color: white !important; border: none !important; }
+    </style>
+""", unsafe_allow_html=True)
 
-SYSTEM_PROMPT = """You are a highly experienced professional swing trader and market analyst with 20+ years of experience.
-You combine technical analysis (ICT, Wyckoff, volume profile, order flow), catalysts, sentiment, and strict risk management.
+st.title("📈 Wild Swing Trades — Playbook Intelligence Hub")
+st.markdown("<p class='disclaimer'>⚠️ Educational & Technical Analysis Only — Not financial advice. Data auto-synced from your blog at wildswingtrades.blogspot.com (RSS).</p>", unsafe_allow_html=True)
+st.markdown("---")
 
-CRITICAL DATA RULES:
-1. Always use the web_search tool to get the absolute latest real-time stock price and data before answering.
-2. Base every valuation, support/resistance, and scenario strictly on current real-world prices. Never hallucinate old levels.
-3. Provide realistic, qualitatively derived probability estimates for all trade targets based on technical confluence, market regime, and ATR."""
-
-# ----------------------------- CORE API CALL (Responses API) -----------------------------
-def grok_api_call(messages: List[Dict], temperature=0.65, max_tokens=2000) -> str:
-    input_payload = messages if isinstance(messages, list) else [messages]
-
-    payload = {
-        "model": MODEL_TAG,
-        "input": input_payload,
-        "temperature": temperature,
-        "max_output_tokens": max_tokens,
-        "tools": [{"type": "web_search"}],
-        "tool_choice": "auto"
-    }
-
-    headers = {
-        "Authorization": f"Bearer {GROK_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    response = requests.post(API_URL, json=payload, headers=headers, timeout=180)
-
-    if response.status_code != 200:
-        print("❌ API Error Details:", response.text)
-        response.raise_for_status()
-
-    data = response.json()
-
+@st.cache_data(ttl=1800, show_spinner="Syncing latest plays from your blog...")
+def get_raw_playbook(lookback_days: int = 30):
+    FEED_URL = "https://wildswingtrades.blogspot.com/feeds/posts/default?alt=rss&max-results=50"
     try:
-        output = data.get("output", [])
-        content_parts = []
-        for item in output:
-            if item.get("type") == "message":
-                for content in item.get("content", []):
-                    if content.get("type") == "output_text":
-                        content_parts.append(content.get("text", ""))
-        return "\n".join(content_parts) or "No content returned."
+        feed = feedparser.parse(FEED_URL)
+        if not feed.entries: raise ValueError("Empty feed")
+        all_plays = []
+        seen_tickers = set()
+        now = datetime.now()
+        for entry in feed.entries:
+            try:
+                title = entry.get("title", "")
+                link = entry.get("link", "")
+                pub_parsed = entry.get("published_parsed")
+                pub_date = datetime(*pub_parsed[:6]) if pub_parsed else now
+                days_old = (now - pub_date).days
+                if days_old > lookback_days: continue
+                content_html = entry.get("description", "") or entry.get("summary", "")
+                soup = BeautifulSoup(content_html, "lxml")
+                full_text = soup.get_text(separator=" ", strip=True)
+                text_lower = full_text.lower()
+                ticker_match = re.search(r'\$([A-Z]{2,5})\b', title)
+                if not ticker_match:
+                    ticker_match = re.search(r'\b([A-Z]{2,5})\b(?=.*(?:stock|inc|holdings|group|etf|fund))', title, re.IGNORECASE)
+                if not ticker_match: continue
+                ticker = ticker_match.group(1).upper()
+                if ticker in seen_tickers: continue
+                seen_tickers.add(ticker)
+
+                # Improved scenario cleaning
+                scenario_base = title.split(":")[0].strip() if ":" in title else title[:60]
+                scenario_base = re.sub(r'\$?[A-Z]{2,5}\b|\s*\(.*?\)\s*', '', scenario_base)
+                scenario_base = re.sub(r'\b(Inc|Corp|Corporation|Holdings|Group|Technologies|Systems|Company|Inc\.|Ltd\.?|LLC)\b', '', scenario_base, flags=re.IGNORECASE)
+                scenario_base = re.sub(r'\s+', ' ', scenario_base).strip()
+                if len(scenario_base) > 45:
+                    scenario_base = scenario_base[:45].rsplit(' ', 1)[0]
+                if not scenario_base:
+                    scenario_base = "Play"
+
+                direction = "Long"
+                if any(kw in text_lower for kw in ["short", "bearish", "resistance play", "failed breakout short"]): direction = "Short"
+                def find_price(keyword_regex, text, fallback=None):
+                    pattern = rf'{keyword_regex}[^.]*?\$?(\d{{1,4}}(?:\.\d{{1,2}})?)'
+                    m = re.search(pattern, text, re.IGNORECASE)
+                    if m:
+                        try:
+                            val = float(m.group(1))
+                            if 0.5 < val < 1000: return val
+                        except: pass
+                    return fallback
+                current_price = find_price(r'(?:near|around|consolidat|trading at|close|currently)', full_text)
+                support = find_price(r'support', full_text, current_price * 0.96 if current_price else None)
+                resistance = find_price(r'(?:resistance|target|breakout to|upside to)', full_text)
+                if not resistance and current_price:
+                    all_prices = [float(p) for p in re.findall(r'\$?(\d{1,4}(?:\.\d{1,2})?)', full_text)]
+                    higher = [p for p in all_prices if p > (current_price or 0) * 1.05]
+                    if higher: resistance = max(higher[:5])
+                base_status = "⏳ Monitoring Setup"
+                if any(kw in text_lower for kw in ["break out", "breaks out", "surge", "explosive", "reclaim", "new high"]): base_status = "🟢 Momentum / Breakout Setup"
+                elif any(kw in text_lower for kw in ["pullback", "dip buy", "value support", "consolidat"]): base_status = "🟢 IN ENTRY ZONE"
+                if days_old <= 1: base_status = "🆕 Fresh • " + base_status
+                def make_zone(price, spread=0.018):
+                    if not price or price <= 0: return "TBD"
+                    low = round(price * (1 - spread), 2)
+                    high = round(price * (1 + spread), 2)
+                    return f"${low:.2f} – ${high:.2f}" if low != high else f"${low:.2f}"
+                plays_for_this = []
+                if support or current_price:
+                    entry_p = support or (current_price * 0.97 if current_price else 0)
+                    stop_p = support * 0.93 if support and support > 0 else (entry_p * 0.90 if entry_p > 0 else 0)
+                    tgt_p = resistance or (current_price * 1.12 if current_price else entry_p * 1.15)
+                    if direction == "Long" and tgt_p and entry_p and tgt_p < entry_p: tgt_p = entry_p * 1.18
+                    plays_for_this.append({"Ticker": ticker, "Scenario": f"{scenario_base} — Pullback/Support Play", "Direction": direction, "Play Status": base_status, "Entry": make_zone(entry_p), "Stop_Loss": f"${stop_p:.2f}" if stop_p > 0 else "TBD", "Targets": make_zone(tgt_p), "Blog Link": link, "Pub Date": pub_date.strftime("%Y-%m-%d"), "Days Old": days_old})
+                if current_price or resistance:
+                    entry_p2 = resistance or (current_price * 1.03 if current_price else 0)
+                    stop_p2 = (current_price * 0.97 if current_price else entry_p2 * 0.95) if direction == "Long" else (entry_p2 * 1.04)
+                    tgt_p2 = (resistance * 1.15 if resistance else (current_price * 1.22 if current_price else 0)) if direction == "Long" else (current_price * 0.88 if current_price else 0)
+                    if direction == "Long" and tgt_p2 and entry_p2 and tgt_p2 < entry_p2 * 1.08: tgt_p2 = entry_p2 * 1.20
+                    plays_for_this.append({"Ticker": ticker, "Scenario": f"{scenario_base} — Breakout/Expansion Play", "Direction": direction, "Play Status": base_status.replace("IN ENTRY ZONE", "⏳ Monitoring Breakout"), "Entry": make_zone(entry_p2), "Stop_Loss": f"${stop_p2:.2f}" if stop_p2 > 0 else "TBD", "Targets": make_zone(tgt_p2), "Blog Link": link, "Pub Date": pub_date.strftime("%Y-%m-%d"), "Days Old": days_old})
+                for p in plays_for_this[:2]: all_plays.append(p)
+                if len(all_plays) >= 20: break
+            except Exception: continue
+        if not all_plays: return get_fallback_playbook()
+        all_plays.sort(key=lambda x: (-x.get("Days Old", 99), x["Ticker"]))
+        return all_plays
     except Exception as e:
-        print("⚠️ Response parsing issue:", e)
-        return str(data)
+        st.warning(f"Blog sync issue: {str(e)[:150]}. Showing fallback data.")
+        return get_fallback_playbook()
 
-# ----------------------------- HTML CLEANER -----------------------------
-def clean_html_output(raw_content: str) -> str:
-    clean = raw_content.strip()
-    clean = re.sub(r'^```html\s*', '', clean, flags=re.IGNORECASE)
-    clean = re.sub(r'^```\s*', '', clean, flags=re.IGNORECASE)
-    clean = re.sub(r'\s*```$', '', clean, flags=re.IGNORECASE)
-    return clean.strip()
+def get_fallback_playbook():
+    return [{"Ticker": "XPO", "Scenario": "Bullish Breakout Expansion", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$225.50 – $227.00", "Stop_Loss": "$214.00", "Targets": "$248.00", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}, {"Ticker": "XPO", "Scenario": "Pullback Support Long", "Direction": "Long", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$202.00 – $205.50", "Stop_Loss": "$190.00", "Targets": "$236.00", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}, {"Ticker": "TKO", "Scenario": "Bullish Breakout Expansion", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$210.00 – $212.00", "Stop_Loss": "$201.00", "Targets": "$228.00", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}, {"Ticker": "TE", "Scenario": "Aggressive Breakout", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$10.40 – $10.65", "Stop_Loss": "$9.55", "Targets": "$12.00", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}, {"Ticker": "UMAC", "Scenario": "Breakout Expansion (from blog)", "Direction": "Long", "Play Status": "🟢 Momentum / Breakout Setup", "Entry": "$26.00 – $27.50", "Stop_Loss": "$24.00", "Targets": "$42.00", "Blog Link": "https://wildswingtrades.blogspot.com/2026/06/unusual-machines-umac-surges-as.html", "Pub Date": "2026-06-05", "Days Old": 1}]
 
-# ----------------------------- ANALYSIS STEPS -----------------------------
-def step_1_technicals(ticker: str) -> str:
-    return f"Research the following ticker: {ticker}. Use your web_search tool to find the exact current live stock price right now. Review the current real-world RSI, EMA, volume profile distribution, and chart resistance/support lines based on today's exact price action. Does it look like a valid technical swing trade setup right now?"
+def parse_price(val_str):
+    nums = re.findall(r"\d+\.\d+|\d+", str(val_str))
+    if not nums: return 0.0
+    return sum(map(float, nums)) / len(nums)
 
-def step_2_sentiment(ticker: str) -> str:
-    return f"Based on the technical profile for {ticker}, what is the current social sentiment among prominent Twitter/X traders over the past 48-72 hours?"
+def compute_matrix_metrics(df):
+    rr_ratios, pct_returns = [], []
+    for _, row in df.iterrows():
+        entry = parse_price(row['Entry'])
+        stop = parse_price(row['Stop_Loss'])
+        target = parse_price(row['Targets'])
+        direction = row['Direction']
+        if entry == 0.0 or stop == 0.0 or target == 0.0:
+            rr_ratios.append("1:1.0"); pct_returns.append("0.0%"); continue
+        if direction == "Long":
+            risk = max(0.01, entry - stop); reward = max(0.01, target - entry)
+        else:
+            risk = max(0.01, stop - entry); reward = max(0.01, entry - target)
+        rr_ratios.append(f"1:{round(reward / risk, 1)}")
+        pct_returns.append(f"+{round((reward / entry) * 100, 1)}%")
+    df['R:R Ratio'] = rr_ratios
+    df['Est. Return'] = pct_returns
+    return df
 
-def step_3_trade_table() -> str:
-    return """Based on the real-world current price found via web search, provide a clean Markdown table of potential trade setups.
-
-You must include an explicit technical estimation of probability for your targets being hit.
-The table MUST include exactly these columns:
-| Entry Zone | Stop Loss | Target 1 | Target 1 Probability | Target 2 | Target 2 Probability | Estimated % Returns | Risk-to-Reward (R:R) Ratio |
-
-**CRITICAL FORMATTING RULES:**
-- In the **Target 1 Probability** and **Target 2 Probability** columns, put the % sign directly in every data row (e.g. 65%, 42%).
-- In the **Estimated % Returns** column, always include the % sign in every row (e.g. +85%, -18%, +120%).
-- Do NOT put any % signs in the column headers.
-- Keep numbers clean and properly formatted.
-
-Directly below the table, write a brief, 2-sentence technical justification explaining why you assigned those specific percentage probabilities (e.g., citing volume profile gaps, nearby key resistance levels, or market trend strength)."""
-
-def step_4_html_blog(ticker: str) -> str:
-    current_date_str = datetime.now().strftime("%B %d, %Y")
-
-    return f"""Write a full professional, comprehensive blog post in clean HTML format optimized for Blogger for {ticker}.
-
-CRITICAL DATE RULE: You must explicitly write the text "{current_date_str}" as the publication/analysis date in the blog header.
-
-Blogger-Specific Design Rules:
-- Wrap everything inside <div class="blogger-post-wrapper">...</div>
-- Include a <style> block with modern CSS targeted only at .blogger-post-wrapper
-- For tables: wrap in .table-container with overflow-x:auto and min-width:700px on the table
-- Ensure the table explicitly displays the Target Probabilities columns with the % signs.
-- Use clean typography, amber risk disclaimer boxes, zebra striping on tables
-- Include risk disclaimers at top and bottom.
-- Link {ticker} to https://www.tradingview.com/symbols/{ticker}/ (target="_blank")
-- Use a compelling title matching the technical thesis.
-
-Output ONLY the raw HTML (starting with the <div class="blogger-post-wrapper">). No extra commentary."""
-
-# ----------------------------- MAIN PIPELINE -----------------------------
-def analyze_tickers(tickers: List[str], delay: int = 12):
-    results = {}
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-
-    print(f"🚀 Starting multi-step Grok analysis for {len(tickers)} tickers...\n")
-
-    for i, ticker in enumerate(tickers, 1):
-        ticker = ticker.upper().replace("$", "").strip()
-        print(f"[{i}/{len(tickers)}] 🔄 Processing {ticker}...")
-
-        conversation = [{"role": "system", "content": SYSTEM_PROMPT}]
-
-        try:
-            for step_func in [step_1_technicals, step_2_sentiment, step_3_trade_table]:
-                user_msg = step_func(ticker) if step_func != step_3_trade_table else step_3_trade_table()
-                conversation.append({"role": "user", "content": user_msg})
-                reply = grok_api_call(conversation)
-                conversation.append({"role": "assistant", "content": reply})
-                print(f"  ↳ Step completed")
-
-            conversation.append({"role": "user", "content": step_4_html_blog(ticker)})
-            raw_html = grok_api_call(conversation, temperature=0.2, max_tokens=4000)
-            final_html = clean_html_output(raw_html)
-
-            results[ticker] = final_html
-
-            filename = f"{ticker}_Live_Blogger_Post_{timestamp}.html"
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(final_html)
-
-            print(f"✅ {ticker} completed → {filename}\n")
-
-            if i < len(tickers):
-                time.sleep(delay)
-
-        except Exception as e:
-            print(f"❌ Error processing {ticker}: {e}")
-            results[ticker] = f"<h1>Error on {ticker}</h1><p>{str(e)}</p>"
-
-    master_file = f"MASTER_LIVE_BLOGGER_EXPORT_{timestamp}.html"
-    with open(master_file, "w", encoding="utf-8") as f:
-        for ticker, content in results.items():
-            f.write(f"\n{content}\n\n<hr style='margin: 40px 0;'>\n\n")
-
-    print(f"\n🎉 All done! Master export: {master_file}")
-    files.download(master_file)
-
-# =============================================================================
-# RUN
-# =============================================================================
-if __name__ == "__main__":
-    try:
-        tickers_input = input("Enter tickers separated by commas (e.g. SMR, OKLO, NNE, HUBC): ")
-    except:
-        tickers_input = "GEV, BWXT"
-
-    tickers = [t.strip() for t in tickers_input.split(",") if t.strip()]
-
+def enrich_with_live_prices(df):
+    tickers = df['Ticker'].unique().tolist()
+    live_prices = {}
     if tickers:
-        analyze_tickers(tickers, delay=12)
-    else:
-        print("No tickers provided.")
+        try:
+            data = yf.download(" ".join(tickers), period="1d", interval="1m", group_by='ticker', progress=False, auto_adjust=True)
+            for t in tickers:
+                try:
+                    live_prices[t] = round(float(data[t]['Close'].iloc[-1] if len(tickers) > 1 else data['Close'].iloc[-1]), 2)
+                except: live_prices[t] = None
+        except: pass
+    df['Live Price'] = df['Ticker'].map(live_prices)
+    return df
+
+lookback_days_default = 30
+raw_plays = get_raw_playbook(lookback_days_default)
+working_df = pd.DataFrame(raw_plays)
+for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Blog Link', 'Pub Date', 'Days Old']:
+    if col not in working_df.columns: working_df[col] = ""
+working_df = enrich_with_live_prices(working_df)
+working_df = compute_matrix_metrics(working_df)
+
+if HAS_AUTOREFRESH:
+    st_autorefresh(interval=25 * 1000, limit=200, key="price_autorefresh")
+
+with st.sidebar:
+    st.header("Controls")
+    lookback_days = st.slider("Look back (days) from blog", 7, 90, lookback_days_default, 1, help="How far back to pull plays from your blog posts.")
+    
+    st.subheader("Filters")
+    status_options = sorted(working_df['Play Status'].dropna().unique().tolist())
+    selected_statuses = st.multiselect("Play Status", options=status_options, default=status_options, help="Uncheck statuses to filter them out")
+    ticker_filter = st.text_input("Ticker contains", "", help="Partial ticker match")
+    
+    if st.button("🔄 Force Full Refresh (Blog + Prices)", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+    if st.button("📈 Refresh Live Prices Only", use_container_width=True):
+        st.rerun()
+    st.divider()
+    st.caption("Blog data refreshes every ~30 min. Live prices ~every 25s.")
+
+if lookback_days != lookback_days_default:
+    raw_plays = get_raw_playbook(lookback_days)
+    working_df = pd.DataFrame(raw_plays)
+    for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Blog Link', 'Pub Date', 'Days Old']:
+        if col not in working_df.columns: working_df[col] = ""
+    working_df = enrich_with_live_prices(working_df)
+    working_df = compute_matrix_metrics(working_df)
+
+filtered_df = working_df.copy()
+if selected_statuses:
+    filtered_df = filtered_df[filtered_df['Play Status'].isin(selected_statuses)]
+if ticker_filter:
+    filtered_df = filtered_df[filtered_df['Ticker'].str.contains(ticker_filter.upper(), case=False, na=False)]
+
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Total Active Setups", len(working_df))
+m2.metric("Showing after filters", len(filtered_df))
+m3.metric("Data Window", f"Last {lookback_days} days from blog")
+m4.metric("Last Updated", datetime.now().strftime("%H:%M:%S"))
+
+st.markdown("### 📋 Active Playbook — Live from Your Wild Swing Trades Blog")
+st.caption("Click any **Ticker** to open its TradingView chart directly. No need to scroll for links.")
+
+# Make Ticker clickable to TradingView (removes need for separate Chart Link column)
+filtered_df['TickerLink'] = filtered_df['Ticker'].apply(lambda t: f"https://www.tradingview.com/symbols/{str(t).upper()}/")
+
+ordered_cols = ['TickerLink', 'Play Status', 'Live Price', 'Entry', 'Stop_Loss', 'Targets', 'Est. Return', 'R:R Ratio', 'Pub Date', 'Blog Link', 'Scenario']
+display_df = filtered_df[[c for c in ordered_cols if c in filtered_df.columns]]
+
+st.dataframe(display_df, column_config={
+    "TickerLink": st.column_config.LinkColumn("Ticker", display_text=r"/symbols/([^/]+)", width="small"),
+    "Scenario": st.column_config.TextColumn("Scenario", width="large"),
+    "Play Status": st.column_config.TextColumn("Status", width="medium"),
+    "Live Price": st.column_config.NumberColumn("Live Price", format="$%.2f", width="small"),
+    "Entry": st.column_config.TextColumn("Entry Zone", width="medium"),
+    "Stop_Loss": st.column_config.TextColumn("Stop Loss", width="small"),
+    "Targets": st.column_config.TextColumn("Target", width="small"),
+    "Est. Return": st.column_config.TextColumn("Est. Return", width="small"),
+    "R:R Ratio": st.column_config.TextColumn("R:R", width="small"),
+    "Pub Date": st.column_config.TextColumn("Blog Date", width="small"),
+    "Blog Link": st.column_config.LinkColumn("Blog Post", display_text="Read Analysis ↗", width="medium")
+}, hide_index=True, use_container_width=True, height=420)
+
+with st.expander("💡 Filter tips"):
+    st.markdown("""
+    - Click the **Ticker** name itself to jump straight to the TradingView chart.
+    - No need to scroll horizontally for links anymore.
+    - Use sidebar filters + lookback slider for precise control.
+    """)
+
+st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3.5 (clickable Ticker) • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
+
