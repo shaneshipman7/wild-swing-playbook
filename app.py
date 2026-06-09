@@ -2,7 +2,9 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import re
+import glob
 from datetime import datetime
+from pathlib import Path
 import feedparser
 from bs4 import BeautifulSoup
 
@@ -12,10 +14,9 @@ try:
 except ImportError:
     HAS_AUTOREFRESH = False
 
-# Page Configuration
-st.set_page_config(page_title="Wild Swing Trades • Live Playbook (Blog Synced)", page_icon="📈", layout="wide")
+# ==================== PAGE SETUP ====================
+st.set_page_config(page_title="Wild Swing Trades • Live Playbook", page_icon="📈", layout="wide")
 
-# Theme
 st.markdown("""
     <style>
         .main, [data-testid="stAppViewContainer"] { background-color: #020617 !important; }
@@ -30,17 +31,56 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📈 Wild Swing Trades — Playbook Intelligence Hub")
-st.markdown("<p class='disclaimer'>⚠️ Educational & Technical Analysis Only — Not financial advice. Data auto-synced from your blog at wildswingtrades.blogspot.com (RSS).</p>", unsafe_allow_html=True)
+st.markdown("<p class='disclaimer'>⚠️ Educational & Technical Analysis Only — Not financial advice. Data from daily CSV + live prices.</p>", unsafe_allow_html=True)
 st.markdown("---")
 
-@st.cache_data(ttl=1800, show_spinner="Syncing latest plays from your blog...")
-def get_raw_playbook(lookback_days: int = 30):
+# ==================== DATA LOADING ====================
+def find_latest_csv():
+    """Find the most recent Master_Playbook_Database_*.csv in the repo root."""
+    files = glob.glob("Master_Playbook_Database_*.csv")
+    if not files:
+        return None
+    # Sort by filename date (newest first)
+    files.sort(reverse=True)
+    return files[0]
+
+def load_playbook_from_csv(csv_path):
+    try:
+        df = pd.read_csv(csv_path)
+        # Clean column names
+        df.columns = [c.strip() for c in df.columns]
+        
+        # Standardize important columns
+        column_map = {
+            'Stop_Loss': 'Stop_Loss',
+            'Targets': 'Targets',
+            'R_R_Ratio': 'R:R Ratio',
+            'Est_Probability': 'Prob',
+            'Link': 'Blog Link',
+            'Current_Price': 'Live Price'
+        }
+        
+        # Rename if they exist
+        for old, new in column_map.items():
+            if old in df.columns:
+                df = df.rename(columns={old: new})
+        
+        # Add missing columns with defaults
+        for col in ['Entry', 'Stop_Loss', 'Targets', 'R:R Ratio', 'Prob', 'Blog Link', 'Scenario']:
+            if col not in df.columns:
+                df[col] = ""
+        
+        df['Source'] = 'CSV'
+        return df
+    except Exception as e:
+        st.warning(f"Could not load CSV: {e}")
+        return None
+
+def get_raw_playbook_fallback(lookback_days=30):
+    # Original blog scraping logic (kept as fallback)
     FEED_URL = "https://wildswingtrades.blogspot.com/feeds/posts/default?alt=rss&max-results=50"
     try:
         feed = feedparser.parse(FEED_URL)
-        if not feed.entries: 
-            raise ValueError("Empty feed")
-        
         all_plays = []
         seen_tickers = set()
         now = datetime.now()
@@ -75,14 +115,12 @@ def get_raw_playbook(lookback_days: int = 30):
                 scenario_base = re.sub(r'\b(Inc|Corp|Corporation|Holdings|Group|Technologies|Systems|Company|Inc\.|Ltd\.?|LLC)\b', '', scenario_base, flags=re.IGNORECASE)
                 scenario_base = re.sub(r'\s+', ' ', scenario_base).strip()
                 if len(scenario_base) > 45:
-                    scenario_base = scenario_base[:45].rsplit(' ', 1)[0]
-                if not scenario_base:
-                    scenario_base = "Play"
+                    scenario_base = scenario_base[:45].rsplit(' ', 1)[0] or "Play"
 
                 direction = "Long"
                 if any(kw in text_lower for kw in ["short", "bearish", "resistance play", "failed breakout short"]): 
                     direction = "Short"
-                
+
                 def find_price(keyword_regex, text, fallback=None):
                     pattern = rf'{keyword_regex}[^.]*?\$?(\d{{1,4}}(?:\.\d{{1,2}})?)'
                     m = re.search(pattern, text, re.IGNORECASE)
@@ -95,20 +133,6 @@ def get_raw_playbook(lookback_days: int = 30):
                             pass
                     return fallback
 
-                prob_t1, prob_t2 = "N/A", "N/A"
-                t1_match = re.search(r'(?:target\s*1|t1)[^.%]*?(\d{2})\s*%', text_lower)
-                t2_match = re.search(r'(?:target\s*2|t2)[^.%]*?(\d{2})\s*%', text_lower)
-                
-                if t1_match: prob_t1 = f"{t1_match.group(1)}%"
-                if t2_match: prob_t2 = f"{t2_match.group(1)}%"
-                
-                if prob_t1 == "N/A":
-                    all_percentages = re.findall(r'(\d{2})\s*%', text_lower)
-                    if len(all_percentages) >= 1:
-                        prob_t1 = f"{all_percentages[0]}%"
-                    if len(all_percentages) >= 2:
-                        prob_t2 = f"{all_percentages[1]}%"
-
                 current_price = find_price(r'(?:near|around|consolidat|trading at|close|currently)', full_text)
                 support = find_price(r'support', full_text, current_price * 0.96 if current_price else None)
                 resistance = find_price(r'(?:resistance|target|breakout to|upside to)', full_text)
@@ -118,7 +142,7 @@ def get_raw_playbook(lookback_days: int = 30):
                     higher = [p for p in all_prices if p > (current_price or 0) * 1.05]
                     if higher: 
                         resistance = max(higher[:5])
-                        
+
                 base_status = "⏳ Monitoring Setup"
                 if any(kw in text_lower for kw in ["break out", "breaks out", "surge", "explosive", "reclaim", "new high"]): 
                     base_status = "🟢 Momentum / Breakout Setup"
@@ -126,17 +150,15 @@ def get_raw_playbook(lookback_days: int = 30):
                     base_status = "🟢 IN ENTRY ZONE"
                 if days_old <= 1: 
                     base_status = "🆕 Fresh • " + base_status
-                    
+
                 def make_zone(price, spread=0.018):
                     if not price or price <= 0: 
                         return "TBD"
                     low = round(price * (1 - spread), 2)
                     high = round(price * (1 + spread), 2)
                     return f"${low:.2f} – \( {high:.2f}" if low != high else f" \){low:.2f}"
-                    
+
                 plays_for_this = []
-                
-                # Pullback / Support Play
                 if support or current_price:
                     entry_p = support or (current_price * 0.97 if current_price else 0)
                     stop_p = support * 0.93 if support and support > 0 else (entry_p * 0.90 if entry_p > 0 else 0)
@@ -145,187 +167,135 @@ def get_raw_playbook(lookback_days: int = 30):
                         tgt_p = entry_p * 1.18
                     plays_for_this.append({
                         "Ticker": ticker, "Scenario": f"{scenario_base} — Pullback/Support Play", 
-                        "Direction": direction, "Play Status": base_status, "Entry": make_zone(entry_p), 
-                        "Stop_Loss": f"${stop_p:.2f}" if stop_p > 0 else "TBD", "Targets": make_zone(tgt_p), 
-                        "Prob T1": prob_t1, "Prob T2": prob_t2, "Blog Link": link, 
-                        "Pub Date": pub_date.strftime("%Y-%m-%d"), "Days Old": days_old
-                    })
-                    
-                # Breakout / Expansion Play
-                if current_price or resistance:
-                    entry_p2 = resistance or (current_price * 1.03 if current_price else 0)
-                    stop_p2 = (current_price * 0.97 if current_price else entry_p2 * 0.95) if direction == "Long" else (entry_p2 * 1.04)
-                    tgt_p2 = (resistance * 1.15 if resistance else (current_price * 1.22 if current_price else 0)) if direction == "Long" else (current_price * 0.88 if current_price else 0)
-                    if direction == "Long" and tgt_p2 and entry_p2 and tgt_p2 < entry_p2 * 1.08: 
-                        tgt_p2 = entry_p2 * 1.20
-                    plays_for_this.append({
-                        "Ticker": ticker, "Scenario": f"{scenario_base} — Breakout/Expansion Play", 
-                        "Direction": direction, "Play Status": base_status.replace("IN ENTRY ZONE", "⏳ Monitoring Breakout"), 
-                        "Entry": make_zone(entry_p2), "Stop_Loss": f"${stop_p2:.2f}" if stop_p2 > 0 else "TBD", 
-                        "Targets": make_zone(tgt_p2), "Prob T1": prob_t1, "Prob T2": prob_t2, 
-                        "Blog Link": link, "Pub Date": pub_date.strftime("%Y-%m-%d"), "Days Old": days_old
+                        "Direction": direction, "Play Status": base_status, 
+                        "Entry": make_zone(entry_p), "Stop_Loss": f"${stop_p:.2f}" if stop_p > 0 else "TBD", 
+                        "Targets": make_zone(tgt_p), "Prob": "N/A", "Blog Link": link,
+                        "Pub Date": pub_date.strftime("%Y-%m-%d"), "Days Old": days_old, "Source": "Blog"
                     })
                 
                 all_plays.extend(plays_for_this)
-                
-            except Exception: 
+            except:
                 continue
                 
-        if not all_plays: 
-            st.warning("No plays found in the lookback window. Showing fallback.")
-            return get_fallback_playbook()
-            
-        all_plays.sort(key=lambda x: (-x.get("Days Old", 99), x["Ticker"]))
-        return all_plays
-        
-    except Exception as e:
-        st.warning(f"Blog sync issue: {str(e)[:150]}. Showing fallback data.")
-        return get_fallback_playbook()
-
-def get_fallback_playbook():
-    return [
-        {"Ticker": "XPO", "Scenario": "Bullish Breakout Expansion", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$225.50 – $227.00", "Stop_Loss": "$214.00", "Targets": "$248.00", "Prob T1": "75%", "Prob T2": "55%", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}, 
-        {"Ticker": "XPO", "Scenario": "Pullback Support Long", "Direction": "Long", "Play Status": "🟢 IN ENTRY ZONE", "Entry": "$202.00 – $205.50", "Stop_Loss": "$190.00", "Targets": "$236.00", "Prob T1": "75%", "Prob T2": "55%", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}, 
-        {"Ticker": "TKO", "Scenario": "Bullish Breakout Expansion", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$210.00 – $212.00", "Stop_Loss": "$201.00", "Targets": "$228.00", "Prob T1": "70%", "Prob T2": "N/A", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1}
-    ]
+        return pd.DataFrame(all_plays) if all_plays else pd.DataFrame()
+    except:
+        return pd.DataFrame()
 
 def parse_price(val_str):
+    if pd.isna(val_str):
+        return 0.0
     nums = re.findall(r"\d+\.\d+|\d+", str(val_str))
     if not nums: 
         return 0.0
     return sum(map(float, nums)) / len(nums)
 
-def compute_matrix_metrics(df):
-    rr_ratios, pct_returns = [], []
+def compute_metrics(df):
+    rr_list, pct_list = [], []
     for _, row in df.iterrows():
-        entry = parse_price(row['Entry'])
-        stop = parse_price(row['Stop_Loss'])
-        target = parse_price(row['Targets'])
+        entry = parse_price(row.get('Entry', 0))
+        stop = parse_price(row.get('Stop_Loss', 0))
+        target = parse_price(row.get('Targets', 0))
         live = row.get('Live Price', None)
-        direction = row['Direction']
+        base = live if (live and live > 0.5) else entry
 
-        base_price = live if (live and isinstance(live, (int, float)) and live > 0.5) else entry
-
-        if base_price == 0.0 or stop == 0.0 or target == 0.0:
-            rr_ratios.append("N/A")
-            pct_returns.append("N/A")
-            continue
-
-        if direction == "Long":
-            raw_risk = entry - stop
-            risk = max(entry * 0.018, raw_risk)   # minimum \~1.8% risk floor
-            reward = max(0.01, target - base_price)
+        # Use CSV R:R if it exists and looks valid
+        csv_rr = str(row.get('R:R Ratio', ''))
+        if csv_rr and ':' in csv_rr and 'N/A' not in csv_rr:
+            rr_list.append(csv_rr)
         else:
-            raw_risk = stop - entry
-            risk = max(entry * 0.018, raw_risk)
-            reward = max(0.01, base_price - target)
+            if entry == 0 or stop == 0 or target == 0:
+                rr_list.append("N/A")
+            else:
+                risk = max(0.01, entry - stop)
+                reward = max(0.01, target - base)
+                rr = round(reward / risk, 1)
+                if rr > 12: rr = 12
+                rr_list.append(f"1:{rr}")
 
-        rr = round(reward / risk, 1)
-        # Cap ridiculous R:R from bad blog parses
-        if rr > 12:
-            rr = 12
-        rr_ratios.append(f"1:{rr}")
-
-        if base_price > 0:
-            pct = round((reward / base_price) * 100, 1)
-            pct_returns.append(f"+{pct}%" if pct > 0 else f"{pct}%")
+        # Est. Return from Live Price
+        if base > 0 and target > 0:
+            pct = round(((target - base) / base) * 100, 1)
+            pct_list.append(f"+{pct}%" if pct > 0 else f"{pct}%")
         else:
-            pct_returns.append("N/A")
+            pct_list.append("N/A")
 
-    df['R:R Ratio'] = rr_ratios
-    df['Est. Return'] = pct_returns
+    df['R:R Ratio'] = rr_list
+    df['Est. Return'] = pct_list
     return df
 
-def enrich_with_live_prices(df):
-    tickers = df['Ticker'].unique().tolist()
-    live_prices = {}
-    if tickers:
-        try:
-            data = yf.download(" ".join(tickers), period="5d", group_by='ticker', progress=False, auto_adjust=True)
-            for t in tickers:
-                try:
-                    if len(tickers) > 1:
-                        live_prices[t] = round(float(data[t]['Close'].iloc[-1]), 2)
-                    else:
-                        live_prices[t] = round(float(data['Close'].iloc[-1]), 2)
-                except: 
-                    live_prices[t] = None
-        except: 
-            pass
-    df['Live Price'] = df['Ticker'].map(live_prices)
+def enrich_live_prices(df):
+    tickers = df['Ticker'].dropna().unique().tolist()
+    if not tickers:
+        return df
+    try:
+        data = yf.download(" ".join(tickers), period="5d", group_by='ticker', progress=False, auto_adjust=True)
+        live = {}
+        for t in tickers:
+            try:
+                if len(tickers) > 1:
+                    live[t] = round(float(data[t]['Close'].iloc[-1]), 2)
+                else:
+                    live[t] = round(float(data['Close'].iloc[-1]), 2)
+            except:
+                live[t] = None
+        df['Live Price'] = df['Ticker'].map(live)
+    except:
+        df['Live Price'] = None
     return df
 
-lookback_days_default = 30
-raw_plays = get_raw_playbook(lookback_days_default)
-working_df = pd.DataFrame(raw_plays)
+# ==================== MAIN DATA LOAD ====================
+csv_file = find_latest_csv()
+if csv_file:
+    working_df = load_playbook_from_csv(csv_file)
+    if working_df is None or working_df.empty:
+        working_df = get_raw_playbook_fallback()
+else:
+    working_df = get_raw_playbook_fallback()
 
-for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Prob T1', 'Prob T2', 'Blog Link', 'Pub Date', 'Days Old']:
-    if col not in working_df.columns: 
-        working_df[col] = ""
-        
-working_df = enrich_with_live_prices(working_df)
-working_df = compute_matrix_metrics(working_df)
+if working_df.empty:
+    st.error("No data available.")
+    st.stop()
 
+working_df = enrich_live_prices(working_df)
+working_df = compute_metrics(working_df)
+
+# ==================== UI ====================
 if HAS_AUTOREFRESH:
-    st_autorefresh(interval=25 * 1000, limit=200, key="price_autorefresh")
+    st_autorefresh(interval=30000, limit=200, key="refresh")
 
 with st.sidebar:
     st.header("Controls")
-    lookback_days = st.slider("Look back (days) from blog", 7, 90, lookback_days_default, 1)
-    
-    st.subheader("Filters")
-    status_options = sorted(working_df['Play Status'].dropna().unique().tolist())
-    selected_statuses = st.multiselect("Play Status", options=status_options, default=status_options)
-    ticker_filter = st.text_input("Ticker contains", "")
-    
-    if st.button("🔄 Force Full Refresh (Blog + Prices)", use_container_width=True):
+    if st.button("🔄 Force Refresh (Prices + Data)", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
-    if st.button("📈 Refresh Live Prices Only", use_container_width=True):
-        st.rerun()
 
-if lookback_days != lookback_days_default:
-    raw_plays = get_raw_playbook(lookback_days)
-    working_df = pd.DataFrame(raw_plays)
-    for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Prob T1', 'Prob T2', 'Blog Link', 'Pub Date', 'Days Old']:
-        if col not in working_df.columns: 
-            working_df[col] = ""
-    working_df = enrich_with_live_prices(working_df)
-    working_df = compute_matrix_metrics(working_df)
-
-filtered_df = working_df.copy()
-if selected_statuses:
-    filtered_df = filtered_df[filtered_df['Play Status'].isin(selected_statuses)]
-if ticker_filter:
-    filtered_df = filtered_df[filtered_df['Ticker'].str.contains(ticker_filter.upper(), case=False, na=False)]
-
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Total Active Setups", len(working_df))
-m2.metric("Showing after filters", len(filtered_df))
-m3.metric("Data Window", f"Last {lookback_days} days")
-m4.metric("Last Updated", datetime.now().strftime("%H:%M:%S"))
+# Metrics
+col1, col2, col3 = st.columns(3)
+col1.metric("Total Setups", len(working_df))
+col2.metric("Data Source", "CSV" if csv_file else "Blog (fallback)")
+col3.metric("Last Updated", datetime.now().strftime("%H:%M:%S"))
 
 st.markdown("### 📋 Active Playbook — Live from Your Wild Swing Trades Blog")
 
-filtered_df['TickerLink'] = filtered_df['Ticker'].apply(lambda t: f"https://www.tradingview.com/symbols/{str(t).upper()}/")
+# Display
+display_cols = ['Ticker', 'Scenario', 'Play Status', 'Live Price', 'Entry', 'Stop_Loss', 'Targets', 'Est. Return', 'R:R Ratio', 'Prob', 'Blog Link']
+for c in display_cols:
+    if c not in working_df.columns:
+        working_df[c] = ""
 
-ordered_cols = ['TickerLink', 'Play Status', 'Live Price', 'Entry', 'Stop_Loss', 'Targets', 'Est. Return', 'R:R Ratio', 'Prob T1', 'Prob T2', 'Pub Date', 'Blog Link', 'Scenario']
-display_df = filtered_df[[c for c in ordered_cols if c in filtered_df.columns]]
+display_df = working_df[[c for c in display_cols if c in working_df.columns]].copy()
 
-st.dataframe(display_df, column_config={
-    "TickerLink": st.column_config.LinkColumn("Ticker", display_text=r"/symbols/([^/]+)", width="small"),
-    "Scenario": st.column_config.TextColumn("Scenario", width="large"),
-    "Play Status": st.column_config.TextColumn("Status", width="medium"),
-    "Live Price": st.column_config.NumberColumn("Live Price", format="$%.2f", width="small"),
-    "Entry": st.column_config.TextColumn("Entry Zone", width="medium"),
-    "Stop_Loss": st.column_config.TextColumn("Stop Loss", width="small"),
-    "Targets": st.column_config.TextColumn("Target", width="small"),
-    "Est. Return": st.column_config.TextColumn("Est. Return", width="small"),
-    "R:R Ratio": st.column_config.TextColumn("R:R", width="small"),
-    "Prob T1": st.column_config.TextColumn("Prob T1", width="small"),  
-    "Prob T2": st.column_config.TextColumn("Prob T2", width="small"),  
-    "Pub Date": st.column_config.TextColumn("Blog Date", width="small"),
-    "Blog Link": st.column_config.LinkColumn("Blog Post", display_text="Read Analysis ↗", width="medium")
-}, hide_index=True, use_container_width=True, height=420)
+st.dataframe(
+    display_df,
+    column_config={
+        "Live Price": st.column_config.NumberColumn("Live Price", format="$%.2f"),
+        "Est. Return": st.column_config.TextColumn("Est. Return"),
+        "R:R Ratio": st.column_config.TextColumn("R:R"),
+        "Blog Link": st.column_config.LinkColumn("Blog Post", display_text="Read ↗"),
+    },
+    hide_index=True,
+    use_container_width=True,
+    height=450
+)
 
-st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3.7 (Dual Probabilities) • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
+st.caption(f"Source: {csv_file or 'Blog RSS fallback'} • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
