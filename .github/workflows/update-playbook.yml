@@ -2,40 +2,37 @@ name: Update Wild Swing Playbook Data
 
 on:
   schedule:
-    - cron: '*/45 * * * *'     # ← Every 45 minutes (while market is trading)
-  workflow_dispatch:
+    # Run every 45 minutes during market hours (Mon–Fri)
+    - cron: '*/45 13-21 * * 1-5'
+  workflow_dispatch:   # Allows manual trigger from GitHub
 
 jobs:
-  build:
+  update-playbook:
     runs-on: ubuntu-latest
-    
-    permissions:
-      contents: write
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        persist-credentials: false
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install feedparser beautifulsoup4 pandas lxml
 
-    - name: Run data collector script
-      env:
-        POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
-      run: python blogreport.py
+      - name: Generate Playbook CSV
+        run: |
+          python generate_playbook.py
 
-    - name: Add & Commit
-      uses: EndBug/add-and-commit@v9
-      with:
-        add: 'Master_Playbook_Database_*.csv Playbook_Watchlist_Import_*.txt'
-        message: '🤖 Auto-update playbook data [skip ci]'
-        push: true
+      - name: Commit and push changes
+        uses: EndBug/add-and-commit@v9
+        with:
+          message: "Auto-update playbook data [skip ci]"
+          add: |
+            Master_Playbook_Database_*.csv
+            Playbook_Watchlist_Import_*.txt
+          default_author: github_actions
