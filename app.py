@@ -31,7 +31,6 @@ st.title("📈 Wild Swing Trades — Playbook Intelligence Hub")
 st.markdown("<p class='disclaimer'>⚠️ Educational & Technical Analysis Only — Not financial advice. Data auto-synced from your blog at wildswingtrades.blogspot.com (RSS).</p>", unsafe_allow_html=True)
 st.markdown("---")
 
-# ==================== DEFAULTS & FIXED FUNCTIONS ====================
 LOOKBACK_DEFAULT = 30
 MAX_SETUPS_DEFAULT = 50
 
@@ -41,7 +40,6 @@ def make_zone(price, spread=0.018):
     low = round(price * (1 - spread), 2)
     high = round(price * (1 + spread), 2)
     return f"${low:.2f} - ${high:.2f}"
-
 
 def parse_price(val_str, which="first"):
     nums = re.findall(r"\d+\.\d+|\d+", str(val_str))
@@ -53,7 +51,6 @@ def parse_price(val_str, which="first"):
         return float(nums[-1])
     else:
         return sum(map(float, nums)) / len(nums)
-
 
 def compute_matrix_metrics(df):
     rr_ratios, pct_returns = [], []
@@ -77,13 +74,13 @@ def compute_matrix_metrics(df):
 
         rr = round(reward / risk, 1)
         pct = round((reward / entry) * 100, 1)
+
         rr_ratios.append(f"1:{rr}")
         pct_returns.append(f"+{pct}%")
 
     df['R:R Ratio'] = rr_ratios
     df['Est. Return'] = pct_returns
     return df
-
 
 @st.cache_data(ttl=1800, show_spinner="Syncing latest plays from your blog...")
 def get_raw_playbook(lookback_days: int = LOOKBACK_DEFAULT, max_setups: int = MAX_SETUPS_DEFAULT):
@@ -198,7 +195,6 @@ def get_raw_playbook(lookback_days: int = LOOKBACK_DEFAULT, max_setups: int = MA
         st.warning(f"Blog sync issue: {str(e)[:150]}. Showing fallback data.")
         return get_fallback_playbook()
 
-
 def get_fallback_playbook():
     return [
         {"Ticker": "XPO", "Scenario": "Bullish Breakout Expansion", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$225.50 - $227.00", "Stop_Loss": "$214.00", "Targets": "$248.00", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1},
@@ -207,7 +203,6 @@ def get_fallback_playbook():
         {"Ticker": "TE", "Scenario": "Aggressive Breakout", "Direction": "Long", "Play Status": "⏳ Monitoring Setup", "Entry": "$10.40 - $10.65", "Stop_Loss": "$9.55", "Targets": "$12.00", "Blog Link": "", "Pub Date": "2026-06-05", "Days Old": 1},
         {"Ticker": "UMAC", "Scenario": "Breakout Expansion (from blog)", "Direction": "Long", "Play Status": "🟢 Momentum / Breakout Setup", "Entry": "$26.00 - $27.50", "Stop_Loss": "$24.00", "Targets": "$42.00", "Blog Link": "https://wildswingtrades.blogspot.com/2026/06/unusual-machines-umac-surges-as.html", "Pub Date": "2026-06-05", "Days Old": 1}
     ]
-
 
 def enrich_with_live_prices(df):
     tickers = df['Ticker'].unique().tolist()
@@ -225,8 +220,7 @@ def enrich_with_live_prices(df):
     df['Live Price'] = df['Ticker'].map(live_prices)
     return df
 
-
-# ==================== INITIAL LOAD ====================
+# Initial load
 raw_plays = get_raw_playbook(LOOKBACK_DEFAULT, MAX_SETUPS_DEFAULT)
 working_df = pd.DataFrame(raw_plays)
 for col in ['Ticker', 'Scenario', 'Direction', 'Play Status', 'Entry', 'Stop_Loss', 'Targets', 'Blog Link', 'Pub Date', 'Days Old']:
@@ -237,16 +231,15 @@ working_df = compute_matrix_metrics(working_df)
 if HAS_AUTOREFRESH:
     st_autorefresh(interval=25 * 1000, limit=200, key="price_autorefresh")
 
-# ==================== SIDEBAR ====================
 with st.sidebar:
     st.header("Controls")
-    lookback_days = st.slider("Look back (days) from blog", 7, 90, LOOKBACK_DEFAULT, 1, help="How far back to pull plays from your blog posts.")
-    max_setups = st.slider("Max setups to display", 10, 100, MAX_SETUPS_DEFAULT, 5, help="Raise this to see more historical plays from the blog.")
+    lookback_days = st.slider("Look back (days) from blog", 7, 90, LOOKBACK_DEFAULT, 1)
+    max_setups = st.slider("Max setups to display", 10, 100, MAX_SETUPS_DEFAULT, 5)
 
     st.subheader("Filters")
     status_options = sorted(working_df['Play Status'].dropna().unique().tolist())
-    selected_statuses = st.multiselect("Play Status", options=status_options, default=status_options, help="Uncheck statuses to filter them out")
-    ticker_filter = st.text_input("Ticker contains", "", help="Partial ticker match")
+    selected_statuses = st.multiselect("Play Status", options=status_options, default=status_options)
+    ticker_filter = st.text_input("Ticker contains", "")
 
     if st.button("🔄 Force Full Refresh (Blog + Prices)", use_container_width=True):
         st.cache_data.clear()
@@ -256,7 +249,6 @@ with st.sidebar:
     st.divider()
     st.caption("Blog data refreshes every \~30 min. Live prices \~every 25s.")
 
-# Re-fetch when lookback changes
 if lookback_days != LOOKBACK_DEFAULT:
     raw_plays = get_raw_playbook(lookback_days, max_setups)
     working_df = pd.DataFrame(raw_plays)
@@ -265,7 +257,6 @@ if lookback_days != LOOKBACK_DEFAULT:
     working_df = enrich_with_live_prices(working_df)
     working_df = compute_matrix_metrics(working_df)
 
-# ==================== FILTERING & DISPLAY ====================
 filtered_df = working_df.copy()
 if selected_statuses:
     filtered_df = filtered_df[filtered_df['Play Status'].isin(selected_statuses)]
@@ -302,9 +293,9 @@ st.dataframe(display_df, column_config={
 
 with st.expander("💡 Filter tips"):
     st.markdown("""
-    - Click the **Ticker** name to jump to TradingView chart.
-    - Use the two sliders in the sidebar to control how many plays and how far back.
-    - On mobile, rotate to landscape for best table view.
+    - Click the **Ticker** name to jump straight to the TradingView chart.
+    - Use the two sliders to control how many plays and how far back.
+    - On mobile, rotate to landscape for the full table.
     """)
 
-st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3.7 (fixed R:R calc) • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
+st.caption(f"Source: wildswingtrades.blogspot.com RSS • v3.9 (honest R:R) • {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} CDT")
