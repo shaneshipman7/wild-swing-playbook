@@ -15,7 +15,7 @@ except ImportError:
 # Page Configuration
 st.set_page_config(page_title="Wild Swing Trades • Live Playbook (Blog Synced)", page_icon="📈", layout="wide")
 
-# Theme & Structural Styling overrides
+# Theme
 st.markdown("""
     <style>
         .main, [data-testid="stAppViewContainer"] { background-color: #020617 !important; }
@@ -60,7 +60,6 @@ def get_raw_playbook(lookback_days: int = 30):
                 full_text = soup.get_text(separator=" ", strip=True)
                 text_lower = full_text.lower()
                 
-                # Ticker extraction
                 ticker_match = re.search(r'\$([A-Z]{2,5})\b', title)
                 if not ticker_match:
                     ticker_match = re.search(r'\b([A-Z]{2,5})\b(?=.*(?:stock|inc|holdings|group|etf|fund))', title, re.IGNORECASE)
@@ -71,7 +70,6 @@ def get_raw_playbook(lookback_days: int = 30):
                     continue
                 seen_tickers.add(ticker)
 
-                # Scenario cleaning
                 scenario_base = title.split(":")[0].strip() if ":" in title else title[:60]
                 scenario_base = re.sub(r'\$?[A-Z]{2,5}\b|\s*\(.*?\)\s*', '', scenario_base)
                 scenario_base = re.sub(r'\b(Inc|Corp|Corporation|Holdings|Group|Technologies|Systems|Company|Inc\.|Ltd\.?|LLC)\b', '', scenario_base, flags=re.IGNORECASE)
@@ -97,7 +95,6 @@ def get_raw_playbook(lookback_days: int = 30):
                             pass
                     return fallback
 
-                # Advanced target probability parsing
                 prob_t1, prob_t2 = "N/A", "N/A"
                 t1_match = re.search(r'(?:target\s*1|t1)[^.%]*?(\d{2})\s*%', text_lower)
                 t2_match = re.search(r'(?:target\s*2|t2)[^.%]*?(\d{2})\s*%', text_lower)
@@ -207,22 +204,26 @@ def compute_matrix_metrics(df):
         live = row.get('Live Price', None)
         direction = row['Direction']
 
-        # Use Live Price for realistic Est. Return when available
         base_price = live if (live and isinstance(live, (int, float)) and live > 0.5) else entry
 
         if base_price == 0.0 or stop == 0.0 or target == 0.0:
-            rr_ratios.append("1:1.0")
+            rr_ratios.append("N/A")
             pct_returns.append("N/A")
             continue
 
         if direction == "Long":
-            risk = max(0.01, entry - stop)
+            raw_risk = entry - stop
+            risk = max(entry * 0.018, raw_risk)   # minimum \~1.8% risk floor
             reward = max(0.01, target - base_price)
         else:
-            risk = max(0.01, stop - entry)
+            raw_risk = stop - entry
+            risk = max(entry * 0.018, raw_risk)
             reward = max(0.01, base_price - target)
 
         rr = round(reward / risk, 1)
+        # Cap ridiculous R:R from bad blog parses
+        if rr > 12:
+            rr = 12
         rr_ratios.append(f"1:{rr}")
 
         if base_price > 0:
