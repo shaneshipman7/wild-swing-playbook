@@ -14,13 +14,21 @@ def extract_ticker(text: str) -> Optional[str]:
     return match.group(1).upper() if match else None
 
 def find_setup_tables(soup: BeautifulSoup) -> List[Tag]:
-    """Find tables that contain real trade setup data (old format)."""
+    """More flexible table finder for Markdown-style tables."""
     tables = soup.find_all("table")
     good_tables = []
     for table in tables:
-        headers = [th.get_text(strip=True).lower() for th in table.find_all("th")]
-        header_str = " ".join(headers)
-        signals = sum(1 for word in ["entry", "stop", "target", "probability", "risk", "conviction"] if word in header_str)
+        # Get all rows
+        rows = table.find_all("tr")
+        if not rows:
+            continue
+
+        # Check first row for header-like content (works for both <th> and <td>)
+        first_row_text = " ".join(cell.get_text(strip=True).lower() for cell in rows[0].find_all(["th", "td"]))
+        
+        signals = sum(1 for word in ["entry", "stop", "target", "conviction", "risk", "reward", "probability"] 
+                      if word in first_row_text)
+        
         if signals >= 2:
             good_tables.append(table)
     return good_tables
@@ -28,78 +36,71 @@ def find_setup_tables(soup: BeautifulSoup) -> List[Tag]:
 def normalize_header(header: str) -> str:
     h = header.lower().strip()
     if "entry" in h: return "Entry"
-    if "stop" in h: return "Stop_Loss"
+    if "stop" in h or "invalidation" in h: return "Stop_Loss"
     if "target 1" in h or h == "t1": return "Target_1"
     if "target 2" in h or h == "t2": return "Target_2"
-    if "prob" in h and ("1" in h or "t1" in h): return "Prob_T1"
-    if "prob" in h and ("2" in h or "t2" in h): return "Prob_T2"
+    if "target 3" in h or h == "t3": return "Target_3"
+    if "prob" in h and "1" in h: return "Prob_T1"
+    if "prob" in h and "2" in h: return "Prob_T2"
+    if "risk" in h and "%" in h: return "Risk_Pct"
+    if "reward" in h and "%" in h: return "Reward_Pct"
     if "risk" in h or "r:r" in h or "rr" in h: return "R_R"
-    if "return" in h or "%" in h: return "Est_Return"
     if "conviction" in h: return "Conviction"
+    if "position" in h and "size" in h: return "Position_Size"
+    if "time" in h and "horizon" in h: return "Time_Horizon"
     return header
 
 def parse_table(table: Tag) -> List[Dict]:
-    headers_raw = [th.get_text(strip=True) for th in table.find_all("th")]
+    rows = table.find_all("tr")
+    if not rows:
+        return []
+
+    # Get headers from first row (supports both <th> and <td>)
+    header_cells = rows[0].find_all(["th", "td"])
+    headers_raw = [cell.get_text(strip=True) for cell in header_cells]
     if not headers_raw:
         return []
+    
     headers = [normalize_header(h) for h in headers_raw]
+
     records = []
-    for tr in table.find_all("tr")[1:]:
-        cells = [td.get_text(strip=True) for td in tr.find_all("td")]
-        if len(cells) < 2: continue
+    for tr in rows[1:]:
+        cells = [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]
+        if len(cells) < 2:
+            continue
         row = {}
         for i, header in enumerate(headers):
             if i < len(cells):
                 row[header] = cells[i]
-        if row.get("Entry") or row.get("Stop_Loss") or row.get("Target_1"):
+        # Keep if it has at least one key field
+        if any(row.get(k) for k in ["Entry", "Stop_Loss", "Target_1", "Conviction"]):
             records.append(row)
     return records
 
 def extract_setups_from_text(soup: BeautifulSoup, title: str) -> List[Dict]:
-    """More aggressive text extractor for current blog style."""
+    """Text extractor for Executive Summary style sections."""
     text = soup.get_text(separator=" ", strip=True)
-    records = []
     record = {}
 
     patterns = {
-        "Entry": [
-            r"(?:Entry|Entries|Entry Zone)[:\s]*\$?([\d.,]+(?:\s*[-–]\s*\$?[\d.,]+)?)",
-            r"(?:around|near|at)\s*\$?([\d.,]+)",
-        ],
-        "Stop_Loss": [
-            r"(?:Stop|Stop Loss|Invalidation|Stop out)[:\s]*\$?([\d.,]+)",
-        ],
-        "Target_1": [
-            r"(?:Target\s*1|First Target|T1|initial target)[:\s]*\$?([\d.,]+)",
-        ],
-        "Target_2": [
-            r"(?:Target\s*2|Second Target|T2)[:\s]*\$?([\d.,]+)",
-        ],
-        "Conviction": [
-            r"(?:Conviction|Conv)[:\s]*(\d+)(?:/100)?",
-        ],
-        "R_R": [
-            r"(?:R:R|Risk[:/]?Reward|RR)[:\s]*([\d:.,]+)",
-        ],
-        "Position_Size": [
-            r"(?:Position Size|Size|Risking)[:\s]*([\d–\-]+%)",
-        ],
-        "Time_Horizon": [
-            r"(?:Time Horizon|Horizon|Hold|swing)[:\s]*([^\n]{3,40})",
-        ],
+        "Entry": r"(?:Entry Zone|Entry)[:\s]*\$?([\d.,]+)",
+        "Stop_Loss": r"(?:Stop Loss|Invalidation)[:\s]*\$?([\d.,]+)",
+        "Target_1": r"(?:Target 1|Target_1)[:\s]*\$?([\d.,]+)",
+        "Target_2": r"(?:Target 2|Target_2)[:\s]*\$?([\d.,]+)",
+        "Conviction": r"(?:Conviction Score|Conviction)[:\s]*(\d+)\s*/\s*100",
+        "Position_Size": r"(?:Position Size)[:\s]*([\d–\-]+%)",
+        "Time_Horizon": r"(?:Time Horizon)[:\s]*([^\n]{3,30})",
+        "R_R": r"(?:Risk / Reward|R:R)[:\s]*([\d\s:.,]+)",
     }
 
-    for key, pattern_list in patterns.items():
-        for pattern in pattern_list:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                record[key] = match.group(1).strip()
-                break
+    for key, pattern in patterns.items():
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            record[key] = match.group(1).strip()
 
-    if record and (record.get("Entry") or record.get("Stop_Loss") or record.get("Target_1") or record.get("Conviction")):
-        records.append(record)
-
-    return records
+    if record and any(record.get(k) for k in ["Entry", "Stop_Loss", "Target_1", "Conviction"]):
+        return [record]
+    return []
 
 def generate_playbook(debug: bool = False):
     print("Fetching blog feed...")
@@ -121,8 +122,6 @@ def generate_playbook(debug: bool = False):
             link = entry.link
             ticker = extract_ticker(title)
             if not ticker:
-                if debug:
-                    print(f"  No $TICKER in title: {title[:60]}")
                 continue
 
             content = entry.get("description", "") or entry.get("summary", "")
@@ -133,13 +132,13 @@ def generate_playbook(debug: bool = False):
             if tables:
                 for table in tables:
                     setups.extend(parse_table(table))
-            else:
+            if not setups:
                 setups = extract_setups_from_text(soup, title)
 
             if not setups:
                 skipped_no_data += 1
                 if debug:
-                    print(f"  No usable setup data found in: {title[:60]}")
+                    print(f"  No usable data in: {title[:50]}")
                 continue
 
             for s in setups:
@@ -151,14 +150,10 @@ def generate_playbook(debug: bool = False):
                     "Stop_Loss": s.get("Stop_Loss", ""),
                     "Target_1": s.get("Target_1", ""),
                     "Target_2": s.get("Target_2", ""),
-                    "Prob_T1": s.get("Prob_T1", ""),
-                    "Prob_T2": s.get("Prob_T2", ""),
-                    "R_R": s.get("R_R", ""),
-                    "Est_Return": s.get("Est_Return", ""),
                     "Conviction": s.get("Conviction", ""),
                     "Position_Size": s.get("Position_Size", ""),
                     "Time_Horizon": s.get("Time_Horizon", ""),
-                    "Setup_Type": s.get("Setup_Type", ""),
+                    "R_R": s.get("R_R", ""),
                     "Link": link,
                     "Status": "TRACKING",
                     "Generated_At": now.strftime("%Y-%m-%d %H:%M")
@@ -166,13 +161,13 @@ def generate_playbook(debug: bool = False):
 
         except Exception as e:
             if debug:
-                print(f"Error on post '{title[:40]}': {e}")
+                print(f"Error on post: {e}")
             continue
 
-    print(f"Processed {processed} posts | Extracted data from {processed - skipped_no_data} posts")
+    print(f"Processed {processed} posts | Extracted from {processed - skipped_no_data} posts")
 
     if not all_records:
-        print("No records extracted. Parser may need more tuning for current post format.")
+        print("No records extracted.")
         return
 
     df = pd.DataFrame(all_records)
@@ -184,6 +179,6 @@ def generate_playbook(debug: bool = False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--debug", action="store_true", help="Show detailed parsing info")
+    parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
     generate_playbook(debug=args.debug)
