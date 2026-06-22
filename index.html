@@ -168,7 +168,7 @@
                 const response = await fetch(`${url}?t=${Date.now()}`, { cache: 'no-store' });
                 if (!response.ok) return null;
                 const text = await response.text();
-                if (!text.trim() || !text.includes('Ticker')) return null;
+                if (!text.trim() || text.trim().toUpperCase() === 'PLACEHOLDER' || !text.includes('Ticker') || text.split('\n').length < 3) return null;
                 return { url, text, date: dateStr };
             } catch (e) {
                 return null;
