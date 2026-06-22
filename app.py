@@ -32,7 +32,7 @@ st.markdown("<p class='disclaimer'>⚠️ Educational & Technical Analysis Only 
 st.markdown("---")
 
 LOOKBACK_DEFAULT = 30
-MAX_SETUPS_DEFAULT = 50
+MAX_SETUPS_DEFAULT = 500
 
 def make_zone(price, spread=0.018):
     if not price or price <= 0:
