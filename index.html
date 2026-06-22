@@ -102,6 +102,13 @@
             return parsed.reduce((a, b) => a + b, 0) / parsed.length;
         }
 
+        function parseCsvPrice(val) {
+            if (val === null || val === undefined || val === '') return null;
+            const clean = String(val).replace(/[\$,]/g, '').trim();
+            const n = parseFloat(clean);
+            return isNaN(n) ? null : n;
+        }
+
         function calculatePctReturn(row, currentPrice) {
             if (!currentPrice || isNaN(currentPrice)) return 0;
             let entryAvg = parseRangeAverage(row.Entry);
@@ -144,31 +151,62 @@
             return { text: "🏁 PASSED / MONITORING", classes: "bg-slate-900 text-slate-400 border border-slate-800" };
         }
 
+        const CSV_URL_BASE = "https://raw.githubusercontent.com/shaneshipman7/wild-swing-playbook/main/Master_Playbook_Database_";
+        const QUOTE_API_BASE = "https://oc.dfwsas.com/api/playbook_quote/";
+        const LATEST_CSV_API = "https://oc.dfwsas.com/api/playbook_latest_csv";
+
+        function formatDateOffset(daysAgo) {
+            const d = new Date();
+            d.setDate(d.getDate() - daysAgo);
+            return d.toISOString().slice(0, 10);
+        }
+
+        async function probeCsvByDate(daysAgo) {
+            const dateStr = formatDateOffset(daysAgo);
+            const url = `${CSV_URL_BASE}${dateStr}.csv`;
+            try {
+                const response = await fetch(`${url}?t=${Date.now()}`, { cache: 'no-store' });
+                if (!response.ok) return null;
+                const text = await response.text();
+                if (!text.trim() || !text.includes('Ticker')) return null;
+                return { url, text, date: dateStr };
+            } catch (e) {
+                return null;
+            }
+        }
+
         async function getLatestPlaybookFile() {
-            const apiUrl = "https://api.github.com/repos/shaneshipman7/wild-swing-playbook/contents/";
-            const response = await fetch(apiUrl);
-            if (!response.ok) throw new Error("Could not list repo files");
-            
-            const files = await response.json();
-            const csvFiles = files
-                .filter(f => f.name.startsWith("Master_Playbook_Database_") && f.name.endsWith(".csv"))
-                .sort((a, b) => b.name.localeCompare(a.name));
-            
-            if (csvFiles.length === 0) throw new Error("No playbook CSV files found");
-            return csvFiles[0].download_url;
+            try {
+                const metaRes = await fetch(`${LATEST_CSV_API}?t=${Date.now()}`, { cache: 'no-store' });
+                if (metaRes.ok) {
+                    const meta = await metaRes.json();
+                    if (meta.url) return meta.url;
+                }
+            } catch (e) {
+                // fall through to raw URL scan
+            }
+
+            for (let daysAgo = 0; daysAgo < 30; daysAgo++) {
+                const found = await probeCsvByDate(daysAgo);
+                if (found) return found.url;
+            }
+            throw new Error("No playbook CSV files found in last 30 days");
         }
 
         async function loadLatestPlaybook() {
             const statusEl = document.getElementById('connectionStatus');
             try {
                 statusEl.innerHTML = "⏳ LOADING MOST RECENT DATA...";
-                const latestUrl = await getLatestPlaybookFile();
-                
-                statusEl.innerHTML = "⏳ FETCHING...";
-                const response = await fetch(latestUrl + '?t=' + Date.now());
-                if (!response.ok) throw new Error("File could not be requested");
-                
-                const loadedText = await response.text();
+
+                let loadedText = null;
+                for (let daysAgo = 0; daysAgo < 30; daysAgo++) {
+                    const found = await probeCsvByDate(daysAgo);
+                    if (found) {
+                        loadedText = found.text;
+                        break;
+                    }
+                }
+                if (!loadedText) throw new Error("No playbook CSV files found");
 
                 Papa.parse(loadedText, {
                     header: true,
@@ -179,8 +217,7 @@
                         for (const row of results.data) {
                             if (!row.Ticker || row.Ticker === 'EXPERIMENTAL DATA ONLY') continue;
                             
-                            let price = parseFloat(row.Current_Price);
-                            if (isNaN(price)) price = null;
+                            let price = parseCsvPrice(row.Current_Price);
                             
                             let calculatedReturn = calculatePctReturn(row, price);
                             let statusInfo = evaluatePlayStatus(row, price);
@@ -196,8 +233,9 @@
 
                         statusEl.className = "px-4 py-2 bg-emerald-950 border border-emerald-500 rounded-xl text-emerald-400 font-bold text-xs";
                         statusEl.innerHTML = `● CONNECTED (${rawPlaybookData.length} plays)`;
-                        
-                        // Auto refresh live prices
+
+                        // Show CSV prices immediately, then refresh live
+                        renderAll();
                         setTimeout(() => autoRefreshLivePrices(), 500);
                     }
                 });
@@ -210,17 +248,35 @@
 
         async function fetchYahooPrice(ticker) {
             try {
-                const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
-                const res = await fetch(url);
-                if (!res.ok) return null;
-                const data = await res.json();
-                const result = data?.chart?.result?.[0];
-                if (!result) return null;
-                const price = result.meta?.regularMarketPrice ?? result.meta?.previousClose;
-                return price ? parseFloat(price) : null;
+                const proxyRes = await fetch(`${QUOTE_API_BASE}${encodeURIComponent(ticker)}?t=${Date.now()}`, { cache: 'no-store' });
+                if (proxyRes.ok) {
+                    const proxyData = await proxyRes.json();
+                    if (proxyData.price) return parseFloat(proxyData.price);
+                }
             } catch (e) {
-                return null;
+                // fall through to Yahoo
             }
+
+            const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
+            const endpoints = [
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooUrl)}`,
+                yahooUrl,
+            ];
+
+            for (const url of endpoints) {
+                try {
+                    const res = await fetch(url);
+                    if (!res.ok) continue;
+                    const data = await res.json();
+                    const result = data?.chart?.result?.[0];
+                    if (!result) continue;
+                    const price = result.meta?.regularMarketPrice ?? result.meta?.previousClose;
+                    if (price) return parseFloat(price);
+                } catch (e) {
+                    continue;
+                }
+            }
+            return null;
         }
 
         async function autoRefreshLivePrices() {
