@@ -55,38 +55,51 @@ def parse_table(table: Tag) -> List[Dict]:
             records.append(row)
     return records
 
-# ===================== NEW: Flexible text-based extractor =====================
 def extract_setups_from_text(soup: BeautifulSoup, title: str) -> List[Dict]:
-    """Extract trade data from structured text when no table is found."""
-    text = soup.get_text(separator="\n", strip=True)
+    """More aggressive text extractor for current blog style."""
+    text = soup.get_text(separator=" ", strip=True)
     records = []
+    record = {}
 
     patterns = {
-        "Entry": r"(?:Entry|Entries)[:\s]*\$?([\d.,]+(?:\s*[-–]\s*\$?[\d.,]+)?)",
-        "Stop_Loss": r"(?:Stop|Stop Loss|Invalidation)[:\s]*\$?([\d.,]+)",
-        "Target_1": r"(?:Target\s*1|First Target|T1)[:\s]*\$?([\d.,]+)",
-        "Target_2": r"(?:Target\s*2|Second Target|T2)[:\s]*\$?([\d.,]+)",
-        "Conviction": r"(?:Conviction|Conv)[:\s]*(\d+)(?:/100)?",
-        "R_R": r"(?:R:R|Risk[:/]?Reward|RR)[:\s]*([\d:.,]+)",
-        "Position_Size": r"(?:Position Size|Size)[:\s]*([\d–\-]+%)",
-        "Time_Horizon": r"(?:Time Horizon|Horizon|Hold Time)[:\s]*([^\n]+)",
-        "Setup_Type": r"(?:Setup Type|Type|Bias)[:\s]*([^\n]+)",
+        "Entry": [
+            r"(?:Entry|Entries|Entry Zone)[:\s]*\$?([\d.,]+(?:\s*[-–]\s*\$?[\d.,]+)?)",
+            r"(?:around|near|at)\s*\$?([\d.,]+)",
+        ],
+        "Stop_Loss": [
+            r"(?:Stop|Stop Loss|Invalidation|Stop out)[:\s]*\$?([\d.,]+)",
+        ],
+        "Target_1": [
+            r"(?:Target\s*1|First Target|T1|initial target)[:\s]*\$?([\d.,]+)",
+        ],
+        "Target_2": [
+            r"(?:Target\s*2|Second Target|T2)[:\s]*\$?([\d.,]+)",
+        ],
+        "Conviction": [
+            r"(?:Conviction|Conv)[:\s]*(\d+)(?:/100)?",
+        ],
+        "R_R": [
+            r"(?:R:R|Risk[:/]?Reward|RR)[:\s]*([\d:.,]+)",
+        ],
+        "Position_Size": [
+            r"(?:Position Size|Size|Risking)[:\s]*([\d–\-]+%)",
+        ],
+        "Time_Horizon": [
+            r"(?:Time Horizon|Horizon|Hold|swing)[:\s]*([^\n]{3,40})",
+        ],
     }
 
-    record = {}
-    found_any = False
+    for key, pattern_list in patterns.items():
+        for pattern in pattern_list:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                record[key] = match.group(1).strip()
+                break
 
-    for key, pattern in patterns.items():
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            record[key] = match.group(1).strip()
-            found_any = True
-
-    if found_any and (record.get("Entry") or record.get("Stop_Loss") or record.get("Target_1")):
+    if record and (record.get("Entry") or record.get("Stop_Loss") or record.get("Target_1") or record.get("Conviction")):
         records.append(record)
 
     return records
-# ==============================================================================
 
 def generate_playbook(debug: bool = False):
     print("Fetching blog feed...")
@@ -115,14 +128,12 @@ def generate_playbook(debug: bool = False):
             content = entry.get("description", "") or entry.get("summary", "")
             soup = BeautifulSoup(content, "lxml")
 
-            # Try old table method first
             tables = find_setup_tables(soup)
             setups = []
             if tables:
                 for table in tables:
                     setups.extend(parse_table(table))
             else:
-                # Fallback to text extraction for current blog format
                 setups = extract_setups_from_text(soup, title)
 
             if not setups:
